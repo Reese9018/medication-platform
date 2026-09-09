@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-base: 15px;
+}
+
+html {
+  font-size: var(--font-base);
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  background-color: #FBF8F3;
+  color: #244336;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Accessibility / large-font mode */
+.font-elder {
+  --font-base: 18px;
+}
+.font-elder .nav-item-label {
+  font-size: 1.05rem;
+}
+.font-elder .elder-large {
+  font-size: 1.1em;
+}
+.font-elder .elder-btn {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+/* High contrast mode */
+.contrast-high {
+  background-color: #FFFFFF;
+}
+.contrast-high body { color: #0E1C14; }
+.contrast-high .text-sage-300 { color: #34503F; }
+.contrast-high .text-sage-400 { color: #2C4436; }
+.contrast-high .text-sage-500 { color: #1E3328; }
+.contrast-high .text-sage-600 { color: #172B20; }
+.contrast-high .text-sage-700 { color: #0F2016; }
+.contrast-high .text-sage-800 { color: #0A150E; }
+.contrast-high .text-sage-200 { color: #4A665A; }
+.contrast-high .bg-cream-50 { background-color: #FFFFFF; }
+.contrast-high .bg-cream-100 { background-color: #F4F6F4; }
+.contrast-high .bg-cream-200 { background-color: #E7ECE9; }
+.contrast-high .bg-sage-50 { background-color: #EEF3F0; }
+.contrast-high .bg-sage-100 { background-color: #DDE7E1; }
+.contrast-high .border-sage-100 { border-color: #8FB3A1; }
+.contrast-high .border-sage-200 { border-color: #6E9C84; }
+
+/* Reduced decoration */
+.reduced-deco .deco-blob,
+.reduced-deco .deco-dots,
+.reduced-deco .deco-line,
+.reduced-deco .deco-wave {
+  display: none !important;
+}
+.reduced-deco .bg-gradient-to-r,
+.reduced-deco .bg-gradient-to-br,
+.reduced-deco .bg-gradient-to-b {
+  background-image: none !important;
+  background-color: #FFFFFF !important;
+}
+.reduced-deco .shadow-soft,
+.reduced-deco .shadow-card,
+.reduced-deco .shadow-pop {
+  box-shadow: none !important;
+}
+.reduced-deco .animate-float,
+.reduced-deco .animate-pulse-soft {
+  animation: none !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #B9D6C7; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #8FBCA4; }
+
+/* Utility helpers */
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-sage-100/60;
+  }
+  .card-soft {
+    @apply bg-white/80 rounded-2xl shadow-soft border border-sage-100/40;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all duration-200 select-none;
+  }
+  .btn-primary {
+    @apply btn bg-sage-600 text-white hover:bg-sage-700 active:scale-[0.98] shadow-soft;
+  }
+  .btn-secondary {
+    @apply btn bg-sage-50 text-sage-700 hover:bg-sage-100 border border-sage-200;
+  }
+  .btn-ghost {
+    @apply btn text-sage-700 hover:bg-sage-50;
+  }
+  .btn-danger {
+    @apply btn bg-coral-50 text-coral-700 hover:bg-coral-100 border border-coral-200;
+  }
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl border border-sage-200 bg-white/70 focus:outline-none focus:ring-2 focus:ring-sage-300 focus:border-sage-400 transition;
+  }
+  .label {
+    @apply block text-sm font-medium text-sage-800 mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sage-700 hover:bg-sage-50 transition-colors cursor-pointer;
+  }
+  .nav-item-active {
+    @apply bg-sage-100 text-sage-800 font-medium;
+  }
+}
+
+/* Recharts tooltip override */
+.recharts-default-tooltip {
+  border-radius: 12px !important;
+  border: 1px solid #DCEBE3 !important;
+  box-shadow: 0 4px 24px -6px rgba(45,85,66,0.12) !important;
+}
