@@ -3,6 +3,28 @@ export function cn(...classes: (string | false | null | undefined)[]) {
 }
 
 // ============================================================
+// 角色头像：按用户角色 + 性别返回对应的卡通形象路径
+// ============================================================
+
+/**
+ * 根据用户角色（elder / family）和性别（男 / 女）返回对应的卡通头像 URL。
+ * 头像素材位于 public/avatars/，由 Vite 作为静态资源暴露到站点根路径。
+ *
+ * 约定：
+ *  - elder + 男 → 老爷爷（蓝底）
+ *  - elder + 女 → 老太太（紫底）
+ *  - family + 男 → 青年男（绿底）
+ *  - family + 女 → 青年女（粉底）
+ *
+ * 兜底：gender 缺失或其他取值时按"女"处理；role 同理按"elder"处理。
+ */
+export function getRoleAvatarUrl(role: 'elder' | 'family' | string | undefined, gender: '男' | '女' | string | undefined): string {
+  const r = role === 'family' ? 'family' : 'elder';
+  const g = gender === '男' ? 'male' : 'female';
+  return `/avatars/${r}-${g}.jpg`;
+}
+
+// ============================================================
 // 健康指标正常范围判定（面向老年人，通俗易懂）
 // ============================================================
 

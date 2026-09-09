@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Accessibility, ChevronDown, LogOut, User, CheckCheck, Menu } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { cn } from '@/lib/utils';
+import { cn, getRoleAvatarUrl } from '@/lib/utils';
 
 export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout, notifications, markNotificationRead, markAllRead, settings, updateSettings, showToast } = useApp();
@@ -123,10 +123,19 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
               className="flex items-center gap-2 pl-1.5 pr-2 py-1.5 rounded-xl hover:bg-sage-50 transition"
             >
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                style={{ backgroundColor: user?.avatarColor || '#4A8265' }}
+                className="w-8 h-8 rounded-full overflow-hidden bg-sage-50 ring-1 ring-white shrink-0"
               >
-                {user?.name?.[0] || 'U'}
+                {user ? (
+                  <img
+                    src={getRoleAvatarUrl(user.role, user.gender)}
+                    alt="用户头像"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-sm font-semibold bg-sage-500">
+                    U
+                  </div>
+                )}
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium text-sage-800 leading-tight">{user?.name}</p>

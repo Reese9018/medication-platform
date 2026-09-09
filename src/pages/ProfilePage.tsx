@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import type { UserProfile } from '@/types';
+import { getRoleAvatarUrl } from '@/lib/utils';
 
 export function ProfilePage() {
   const { user, medications, showToast } = useApp();
@@ -51,8 +52,12 @@ export function ProfilePage() {
       {/* ===== 用户信息卡片 ===== */}
       <Card className="p-6 shadow-card border-sage-100">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-          <div className="w-24 h-24 rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-card shrink-0" style={{ backgroundColor: user.avatarColor }}>
-            {user.name[0]}
+          <div className="w-24 h-24 rounded-full overflow-hidden shadow-card shrink-0 bg-sage-50 ring-2 ring-white">
+            <img
+              src={getRoleAvatarUrl(user.role, user.gender)}
+              alt={`${user.role === 'family' ? '家属' : '老人'}头像`}
+              className="w-full h-full object-cover"
+            />
           </div>
           <div className="flex-1 text-center sm:text-left">
             <h2 className="text-2xl font-bold text-sage-800">{user.name}</h2>
