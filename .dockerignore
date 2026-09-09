@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.gitignore
+.workbuddy
+backend/.env
+backend/__pycache__
+backend/**/__pycache__
+backend/*.log
+backend/backend.log
+*.pyc
+.vercel
+README.md

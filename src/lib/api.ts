@@ -10,8 +10,14 @@ import type {
   UserProfile,
 } from '@/types';
 
+// 生产构建且未显式指定 VITE_API_URL 时，使用同源相对路径（前后端一体部署）
+// 本地开发（vite dev 5173 端口）继续指向本地后端 8000 端口
+const apiBaseURL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
+  baseURL: apiBaseURL,
   headers: { 'Content-Type': 'application/json' },
 });
 
