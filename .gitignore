@@ -41,3 +41,6 @@ venv/
 
 # Bolt
 .bolt
+
+# WorkBuddy local assistant memory
+.workbuddy/
