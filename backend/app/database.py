@@ -10,9 +10,9 @@ class Base(DeclarativeBase):
 
 engine = create_engine(
     get_settings().database_url,
-    pool_pre_ping=True,
     future=True,
-    # Neon 服务端约 5 分钟回收空闲连接：300s 前主动重建，避免预检重连拖慢请求
+    # Neon pooled（pgbouncer）连接稳定，无需每次请求 pre_ping；
+    # 空闲约 5 分钟回收，300s 前主动重建避免 stale 连接
     pool_recycle=300,
     # 池满时最多等 15 秒拿连接，超时快速失败而非无限挂起
     pool_timeout=15,
