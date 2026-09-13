@@ -18,6 +18,9 @@ class UserCreate(BaseModel):
 class LoginRequest(BaseModel):
     account: str
     password: str
+    # 可选的角色校验：当前端 LoginPage 切到「家属端 / 老人端」时带上。
+    # 后端查到账号后会与 DB 里的 role 比对，不匹配返回 403，防止误登到错误身份侧。
+    role: Role | None = None
 
 class UserOut(ORMModel):
     id: int; account: str; name: str; phone: str | None; age: int; gender: str
@@ -33,6 +36,7 @@ class TokenOut(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None; age: int | None = None; gender: str | None = None
     height: float | None = None; weight: float | None = None; blood_type: str | None = None
+    phone: str | None = None
     chronic_conditions: list[str] | None = None; allergies: list[str] | None = None
     emergency_contact: str | None = None
 
@@ -85,11 +89,40 @@ class AssistantResponse(BaseModel):
     content: str; cards: list[AICard]
     conversation_id: str | None = Field(default=None, description="扣子会话ID，前端保存后下次请求带上")
 
-class FamilyBindRequest(BaseModel):
-    family_account: str; relationship: str = "家属"
+class FamilyRequestCreate(BaseModel):
+    """发起绑定申请：输入对方账号（account）。"""
+    account: str = Field(min_length=2, max_length=64)
+    relationship: str = Field(default="家属", max_length=32)
+
 
 class FamilyMemberOut(BaseModel):
-    id: int; name: str; relationship: str; role: str; bound: bool; phone: str | None
+    """已绑定（active）的家庭成员。"""
+    id: int            # 对方用户 id
+    name: str
+    relationship: str
+    role: str
+    phone: str | None
+    status: str = "active"
+
+
+class FamilyRequestOut(BaseModel):
+    """一条绑定申请（pending 状态）。
+
+    peer_* 字段是「与我相对的那一方」：
+    - incoming：peer 是申请人（我要决定同意/拒绝）
+    - outgoing：peer 是被申请人（我在等对方同意）
+    """
+    id: int
+    peer_id: int
+    peer_name: str
+    peer_role: str
+    peer_phone: str | None
+    relationship: str
+    status: str
+    requester_id: int
+    requester_name: str
+    direction: Literal["incoming", "outgoing"]
+    created_at: datetime
 
 class NotificationOut(ORMModel):
     id: int; user_id: int; title: str; detail: str; level: str; read: bool; created_at: datetime

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from .config import get_settings
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal, engine, run_legacy_migrations
 from .services.seed import seed_demo_data
 from .routers import auth, users, medications, schedule, health, risks, assistant, family, reports, notifications
 
@@ -14,6 +14,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    run_legacy_migrations()
     with SessionLocal() as db:
         seed_demo_data(db)
     yield

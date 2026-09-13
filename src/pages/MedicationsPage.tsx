@@ -14,6 +14,7 @@ import { PillIcon } from '@/components/ui/Decorations';
 import type { Medication } from '@/types';
 import { medicationApi, type OCRResult } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { FamilyMedsView } from './family/FamilyMedsView';
 
 const categories = ['全部', '降压药', '降糖药', '心血管药', '精神类药', '其他'];
 
@@ -24,7 +25,7 @@ const statusMap = {
 };
 
 export function MedicationsPage() {
-  const { medications, addMedication, updateMedication, removeMedication, showToast } = useApp();
+  const { user, medications, addMedication, updateMedication, removeMedication, showToast } = useApp();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('全部');
   const [ocrOpen, setOcrOpen] = useState(false);
@@ -55,6 +56,11 @@ export function MedicationsPage() {
     setAddOpen(false);
     setEditing(null);
   };
+
+  // 家属端：用药页（老人切换 + 计划/记录/漏服/药箱），老人端原页面保持不变
+  if (user?.role === 'family') {
+    return <FamilyMedsView />;
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">

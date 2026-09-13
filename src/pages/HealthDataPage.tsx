@@ -15,9 +15,10 @@ import { SectionTitle, StatPill } from '@/components/ui/Common';
 import { HealthCalendar } from '@/components/HealthCalendar';
 import type { HealthRecord } from '@/types';
 import { cn, getBloodPressureStatus, getBloodSugarStatus, getHeartRateStatus } from '@/lib/utils';
+import { FamilyHealthView } from './family/FamilyHealthView';
 
 export function HealthDataPage() {
-  const { healthRecords, addHealthRecord, showToast } = useApp();
+  const { user, healthRecords, addHealthRecord, showToast } = useApp();
   const [range, setRange] = useState<'7' | '30'>('7');
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ systolic: 130, diastolic: 82, bloodSugar: 6.0, heartRate: 75 });
@@ -39,6 +40,7 @@ export function HealthDataPage() {
   const data = useMemo(() => {
     // 取最近7条作为基础数据（已按时间正序）
     const base = sortedRecords.slice(-7);
+    if (base.length === 0) return [];
     if (range === '7') {
       return base.map((r) => ({ date: r.date.slice(5), systolic: r.systolic, diastolic: r.diastolic, bloodSugar: r.bloodSugar, heartRate: r.heartRate }));
     }
@@ -58,9 +60,15 @@ export function HealthDataPage() {
     return extended;
   }, [sortedRecords, range]);
 
-  // 最新一条记录（sortedRecords 已正序，最后一条即最新）
-  const latest = sortedRecords[sortedRecords.length - 1];
-  const avg = (key: keyof typeof data[0]) => Math.round(data.reduce((s, d) => s + (d[key] as number), 0) / data.length);
+  // 最新一条记录（sortedRecords 已正序，最后一条即最新）；无记录时为 null，界面显示占位而非白屏
+  const latest = sortedRecords.length > 0 ? sortedRecords[sortedRecords.length - 1] : null;
+  const avg = (key: keyof typeof data[0]) => data.length ? Math.round(data.reduce((s, d) => s + (d[key] as number), 0) / data.length) : 0;
+
+  // 无健康记录时的中性占位状态
+  const noDataStatus: import('@/lib/utils').HealthStatusResult = {
+    status: 'normal', label: '暂无数据', color: 'text-sage-500', bg: 'bg-cream-100', border: 'border-sage-100',
+    tip: '暂无健康记录，请先录入数据。',
+  };
 
   const handleAdd = () => {
     const now = new Date();
@@ -75,6 +83,11 @@ export function HealthDataPage() {
     setAddOpen(false);
     showToast('健康数据已记录');
   };
+
+  // 家属端：健康页（老人切换 + 血压/血糖/心率/趋势/档案），老人端原页面保持不变
+  if (user?.role === 'family') {
+    return <FamilyHealthView />;
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -102,23 +115,23 @@ export function HealthDataPage() {
         <MetricCard
           icon={<HeartPulse size={20} />}
           label="最近血压"
-          value={`${latest.systolic}/${latest.diastolic}`}
+          value={latest ? `${latest.systolic}/${latest.diastolic}` : '--/--'}
           unit="mmHg"
-          statusResult={getBloodPressureStatus(latest.systolic, latest.diastolic)}
+          statusResult={latest ? getBloodPressureStatus(latest.systolic, latest.diastolic) : noDataStatus}
         />
         <MetricCard
           icon={<Droplet size={20} />}
           label="最近血糖"
-          value={latest.bloodSugar}
+          value={latest ? latest.bloodSugar : '--'}
           unit="mmol/L"
-          statusResult={getBloodSugarStatus(latest.bloodSugar)}
+          statusResult={latest ? getBloodSugarStatus(latest.bloodSugar) : noDataStatus}
         />
         <MetricCard
           icon={<Gauge size={20} />}
           label="最近心率"
-          value={latest.heartRate}
+          value={latest ? latest.heartRate : '--'}
           unit="次/分"
-          statusResult={getHeartRateStatus(latest.heartRate)}
+          statusResult={latest ? getHeartRateStatus(latest.heartRate) : noDataStatus}
         />
       </div>
 
@@ -155,7 +168,7 @@ export function HealthDataPage() {
         </Card>
 
         <Card>
-          <CardHeader title="血糖趋势" subtitle={`近 ${range} 天 · 平均 ${(data.reduce((s, d) => s + d.bloodSugar, 0) / data.length).toFixed(1)} mmol/L`} icon={<Droplet size={18} />} />
+          <CardHeader title="血糖趋势" subtitle={`近 ${range} 天 · 平均 ${data.length ? (data.reduce((s, d) => s + d.bloodSugar, 0) / data.length).toFixed(1) : '--'} mmol/L`} icon={<Droplet size={18} />} />
           <div className="px-5 h-60">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>

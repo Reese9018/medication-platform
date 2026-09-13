@@ -1,7 +1,17 @@
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, JSON
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
+
+
+# 家庭绑定关系三态：
+#   pending  —— 申请中：一方已发起，等待另一方同意；双方此时都不能看对方数据
+#   active   —— 已绑定：家属可查看老人授权的用药/健康数据
+#   rejected —— 已拒绝/已解除：可重新发起申请
+# 无记录视为「未绑定」。
+LINK_STATUS_PENDING = "pending"
+LINK_STATUS_ACTIVE = "active"
+LINK_STATUS_REJECTED = "rejected"
 
 
 class User(Base):
@@ -26,7 +36,12 @@ class User(Base):
     medications: Mapped[list["Medication"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     health_records: Mapped[list["HealthRecord"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     doses: Mapped[list["ScheduleDose"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    # 我作为老人（被监护方）时，家属列表
     family_links: Mapped[list["FamilyLink"]] = relationship(foreign_keys="FamilyLink.user_id", back_populates="user", cascade="all, delete-orphan")
+    # 我作为家属（监护方）时，老人列表
+    elder_links: Mapped[list["FamilyLink"]] = relationship(foreign_keys="FamilyLink.family_user_id", back_populates="family_user", cascade="all, delete-orphan")
+    # 我发起的绑定申请
+    requested_links: Mapped[list["FamilyLink"]] = relationship(foreign_keys="FamilyLink.requester_id", back_populates="requester", cascade="all, delete-orphan")
 
 
 class Medication(Base):
@@ -81,15 +96,25 @@ class HealthRecord(Base):
 
 
 class FamilyLink(Base):
+    """家庭绑定关系（三态）。
+
+    数据流向固定：user_id 始终是老人（elder），family_user_id 始终是家属（family）。
+    无论谁先发起申请，这条记录的两个端点角色都不变，只通过 requester_id 记录发起人。
+    """
     __tablename__ = "family_links"
+    __table_args__ = (UniqueConstraint("user_id", "family_user_id", name="uq_family_link_pair"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    family_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)          # 老人（被监护方）
+    family_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # 家属（监护方）
+    requester_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)     # 谁发起的申请
     relationship_name: Mapped[str] = mapped_column(String(32), default="家属")
-    bound: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(16), default=LINK_STATUS_PENDING, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     user: Mapped[User] = relationship(foreign_keys=[user_id], back_populates="family_links")
-    family_user: Mapped[User] = relationship(foreign_keys=[family_user_id])
+    family_user: Mapped[User] = relationship(foreign_keys=[family_user_id], back_populates="elder_links")
+    requester: Mapped[User] = relationship(foreign_keys=[requester_id], back_populates="requested_links")
 
 
 class Notification(Base):

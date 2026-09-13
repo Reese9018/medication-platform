@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { UserProfile, Medication, ScheduleDose, HealthRecord, FamilyMember, AppNotification, DoseStatus } from '@/types';
+import type { UserProfile, Medication, ScheduleDose, HealthRecord, FamilyMember, FamilyRequest, AppNotification, DoseStatus } from '@/types';
 import { elderProfile, familyProfile, medications as initialMeds, todaySchedule, healthRecords as initialHealth, familyMembers as initialFamily, notifications as initialNotifs } from '@/data/mockData';
 import { assistantApi, authApi, familyApi, healthApi, medicationApi, notificationApi, scheduleApi, userApi } from '@/lib/api';
 
@@ -8,9 +8,10 @@ interface Toast { id: number; message: string; type: 'success' | 'error' | 'info
 
 interface AppContextValue {
   user: UserProfile | null;
-  login: (account: string, password: string) => Promise<boolean>;
+  login: (account: string, password: string, role?: 'elder' | 'family') => Promise<boolean>;
   logout: () => void;
   register: (name: string, role: 'elder' | 'family', account?: string, password?: string, phone?: string) => Promise<void>;
+  updateUser: (patch: Partial<UserProfile>) => Promise<void>;
   medications: Medication[];
   setMedications: React.Dispatch<React.SetStateAction<Medication[]>>;
   addMedication: (m: Medication) => Promise<void>;
@@ -22,9 +23,13 @@ interface AppContextValue {
   healthRecords: HealthRecord[];
   addHealthRecord: (r: HealthRecord) => Promise<void>;
   familyMembers: FamilyMember[];
-  setFamilyMembers: React.Dispatch<React.SetStateAction<FamilyMember[]>>;
-  bindFamily: (account: string, relationship: string) => Promise<void>;
-  unbindFamily: (id: string) => Promise<void>;
+  incomingRequests: FamilyRequest[];
+  outgoingRequests: FamilyRequest[];
+  sendFamilyRequest: (account: string, relationship: string) => Promise<boolean>;
+  acceptFamilyRequest: (id: string) => Promise<void>;
+  rejectFamilyRequest: (id: string) => Promise<void>;
+  unbindMember: (peerId: string) => Promise<void>;
+  refreshFamily: () => Promise<void>;
   notifications: AppNotification[];
   markNotificationRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
@@ -45,6 +50,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [schedule, setSchedule] = useState<ScheduleDose[]>(todaySchedule);
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>(initialHealth);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(initialFamily);
+  const [incomingRequests, setIncomingRequests] = useState<FamilyRequest[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<FamilyRequest[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>(initialNotifs);
   const [settings, setSettings] = useState<Settings>({ elderMode: false, highContrast: false, reducedDeco: false, voiceRead: false });
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -63,14 +70,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const dismissToast = useCallback((id: number) => setToasts((items) => items.filter((item) => item.id !== id)), []);
 
+  const refreshFamily = useCallback(async () => {
+    const [members, incoming, outgoing] = await Promise.all([
+      familyApi.listMembers(), familyApi.listIncoming(), familyApi.listOutgoing(),
+    ]);
+    setFamilyMembers(members);
+    setIncomingRequests(incoming);
+    setOutgoingRequests(outgoing);
+  }, []);
+
   const loadUserData = useCallback(async () => {
-    const [meds, health, family, notifs] = await Promise.all([medicationApi.list(), healthApi.list(), familyApi.list(), notificationApi.list()]);
+    const [meds, health, notifs] = await Promise.all([medicationApi.list(), healthApi.list(), notificationApi.list()]);
     setMedications(meds);
     setHealthRecords(health);
-    setFamilyMembers(family);
     setNotifications(notifs);
     setSchedule(await scheduleApi.list(meds));
-  }, []);
+    await refreshFamily();
+  }, [refreshFamily]);
 
   useEffect(() => {
     if (!localStorage.getItem('zhiyouyao_token')) return;
@@ -80,14 +96,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }).catch(() => authApi.logout());
   }, [loadUserData]);
 
-  const login = useCallback(async (account: string, password: string) => {
+  const login = useCallback(async (account: string, password: string, role?: 'elder' | 'family') => {
     try {
-      const profile = await authApi.login(account, password);
+      const profile = await authApi.login(account, password, role);
       setUser(profile);
       await loadUserData();
       return true;
-    } catch {
-      return false;
+    } catch (err) {
+      // 把 axios 错误原样抛出，让登录页 UI 能区分：网络异常 / 401 密码错 / 403 身份错 / 其他
+      // —— 否则所有失败都会被合并成「账号或密码错误」一条文案，用户根本没法自助排查
+      throw err;
     }
   }, [loadUserData]);
 
@@ -98,6 +116,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(profile);
     await loadUserData();
   }, [loadUserData]);
+
+  const updateUser = useCallback(async (patch: Partial<UserProfile>) => {
+    try {
+      const payload = {
+        name: patch.name, age: patch.age, gender: patch.gender,
+        height: patch.height, weight: patch.weight, bloodType: patch.bloodType,
+        phone: patch.phone,
+        chronicConditions: patch.chronicConditions, allergies: patch.allergies,
+        emergencyContact: patch.emergencyContact,
+      };
+      const updated = await userApi.update(payload);
+      setUser(updated);
+      showToast('健康档案已更新');
+    } catch {
+      showToast('档案更新失败，请确认后端服务已启动', 'error');
+    }
+  }, [showToast]);
 
   const addMedication = useCallback(async (medication: Medication) => {
     try { const created = await medicationApi.create(medication); setMedications((items) => [...items, created]); showToast('药品已添加'); } catch { showToast('药品添加失败，请确认后端服务已启动', 'error'); }
@@ -124,12 +159,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addHealthRecord = useCallback(async (record: HealthRecord) => {
     try { const created = await healthApi.create(record); setHealthRecords((items) => [...items, created]); } catch { showToast('健康数据保存失败', 'error'); }
   }, [showToast]);
-  const bindFamily = useCallback(async (account: string, relationship: string) => {
-    try { const member = await familyApi.bind({ familyAccount: account, relationship }); setFamilyMembers((items) => [...items.filter((item) => item.id !== member.id), member]); } catch { showToast('家属绑定失败，请检查账号', 'error'); }
+  const sendFamilyRequest = useCallback(async (account: string, relationship: string): Promise<boolean> => {
+    try {
+      await familyApi.createRequest({ account, relationship });
+      await refreshFamily();
+      showToast('申请已发送，等待对方同意');
+      return true;
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || '申请发送失败，请检查对方账号';
+      showToast(msg, 'error');
+      return false;
+    }
+  }, [refreshFamily, showToast]);
+
+  const acceptFamilyRequest = useCallback(async (id: string) => {
+    try {
+      await familyApi.acceptRequest(id);
+      await refreshFamily();
+      showToast('已同意绑定');
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || '操作失败', 'error');
+    }
+  }, [refreshFamily, showToast]);
+
+  const rejectFamilyRequest = useCallback(async (id: string) => {
+    try {
+      await familyApi.rejectRequest(id);
+      setIncomingRequests((items) => items.filter((item) => item.id !== id));
+      showToast('已拒绝该申请', 'info');
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || '操作失败', 'error');
+    }
   }, [showToast]);
-  const unbindFamily = useCallback(async (id: string) => {
-    try { await familyApi.unbind(id); setFamilyMembers((items) => items.map((item) => item.id === id ? { ...item, bound: false } : item)); } catch { showToast('解除绑定失败', 'error'); }
-  }, [showToast]);
+
+  const unbindMember = useCallback(async (peerId: string) => {
+    try {
+      await familyApi.unbind(peerId);
+      await refreshFamily();
+      showToast('已解除绑定', 'info');
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || '解除绑定失败', 'error');
+    }
+  }, [refreshFamily, showToast]);
   const markNotificationRead = useCallback(async (id: string) => {
     try { await notificationApi.read(id); setNotifications((items) => items.map((item) => item.id === id ? { ...item, read: true } : item)); } catch { showToast('消息更新失败', 'error'); }
   }, [showToast]);
@@ -151,7 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { /* 语音不可用时静默 */ }
   }, [settings.voiceRead]);
 
-  return <AppContext.Provider value={{ user, login, logout, register, medications, setMedications, addMedication, updateMedication, removeMedication, schedule, setSchedule, markDose, healthRecords, addHealthRecord, familyMembers, setFamilyMembers, bindFamily, unbindFamily, notifications, markNotificationRead, markAllRead, askAssistant: assistantApi.chat, settings, updateSettings, speak, toasts, showToast, dismissToast }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ user, login, logout, register, updateUser, medications, setMedications, addMedication, updateMedication, removeMedication, schedule, setSchedule, markDose, healthRecords, addHealthRecord, familyMembers, incomingRequests, outgoingRequests, sendFamilyRequest, acceptFamilyRequest, rejectFamilyRequest, unbindMember, refreshFamily, notifications, markNotificationRead, markAllRead, askAssistant: assistantApi.chat, settings, updateSettings, speak, toasts, showToast, dismissToast }}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {

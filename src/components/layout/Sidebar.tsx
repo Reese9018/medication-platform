@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   Home, Bot, Pill, CalendarClock, ShieldAlert, Activity,
-  FolderHeart, Users, FileText, Settings, ShieldPlus,
+  FolderHeart, Users, FileText, Settings, ShieldPlus, UserRound,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
@@ -20,16 +20,16 @@ const elderNav = [
   { to: '/settings', label: '系统设置', icon: Settings },
 ];
 
+// 家属端（子女端）侧边导航：只保留 4 个一级入口，子内容由各页面承载
+// 首页 → 家庭健康概览 / 今日用药 / 异常提醒
+// 用药 → 老人用药计划 / 服药记录 / 漏服记录 / 药品管理
+// 健康 → 血压 / 血糖 / 心率 / 健康趋势 / 健康档案
+// 我的 → 家庭成员 / 绑定申请 / 权限管理 / 消息通知 / 个人信息
 const familyNav = [
-  { to: '/', label: '家庭健康中心', icon: Home },
-  { to: '/assistant', label: 'AI 智能用药助手', icon: Bot },
-  { to: '/medications', label: '老人药品', icon: Pill },
-  { to: '/schedule', label: '用药记录', icon: CalendarClock },
-  { to: '/risk', label: 'AI 用药风险分析', icon: ShieldAlert },
-  { to: '/health', label: '健康数据', icon: Activity },
-  { to: '/profile', label: '老人健康档案', icon: FolderHeart },
-  { to: '/reports', label: '健康报告', icon: FileText },
-  { to: '/settings', label: '系统设置', icon: Settings },
+  { to: '/', label: '首页', icon: Home },
+  { to: '/medications', label: '用药', icon: Pill },
+  { to: '/health', label: '健康', icon: Activity },
+  { to: '/family', label: '我的', icon: UserRound },
 ];
 
 export function Sidebar() {

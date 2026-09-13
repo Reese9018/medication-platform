@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AppProvider, useApp } from '@/context/AppContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { HomePage } from '@/pages/HomePage';
@@ -48,11 +49,21 @@ function AppRoutes() {
   );
 }
 
+function AppRoutesWithBoundary() {
+  // key 绑定路由路径：切换页面时自动重置错误状态；同一页面内出错则展示兜底页
+  const location = useLocation();
+  return (
+    <ErrorBoundary key={location.pathname}>
+      <AppRoutes />
+    </ErrorBoundary>
+  );
+}
+
 function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <AppRoutesWithBoundary />
         <ToastContainer />
       </BrowserRouter>
     </AppProvider>

@@ -42,5 +42,9 @@ venv/
 # Bolt
 .bolt
 
+# 设计稿与调试截图（不参与部署，不上传）
+design/
+login_error.png
+
 # WorkBuddy local assistant memory
 .workbuddy/

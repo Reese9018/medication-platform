@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..dependencies import get_current_user
+from ..dependencies import get_current_user, get_observed_user
 from ..models import HealthRecord, ScheduleDose, User
 from ..schemas import ReportOut
 
@@ -10,10 +10,11 @@ router = APIRouter(prefix="/reports", tags=["健康报告"])
 
 @router.get("/{period}", response_model=ReportOut)
 def report(period: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    observed = get_observed_user(user, db)
     days = 30 if period == "month" else 7
     end = date.today(); start = end - timedelta(days=days - 1)
-    records = db.query(HealthRecord).filter(HealthRecord.user_id == user.id, HealthRecord.record_date >= start).all()
-    doses = db.query(ScheduleDose).filter(ScheduleDose.user_id == user.id, ScheduleDose.dose_date >= start).all()
+    records = db.query(HealthRecord).filter(HealthRecord.user_id == observed.id, HealthRecord.record_date >= start).all()
+    doses = db.query(ScheduleDose).filter(ScheduleDose.user_id == observed.id, ScheduleDose.dose_date >= start).all()
     count = len(records) or 1
     taken = sum(1 for dose in doses if dose.status == "taken")
     missed = sum(1 for dose in doses if dose.status == "missed")

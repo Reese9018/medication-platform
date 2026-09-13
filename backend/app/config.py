@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/zhiyouyao"
     jwt_secret_key: str = "change-me-in-production"
     jwt_expire_minutes: int = 1440
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # 扣子（Coze）智能体接入配置；留空则 AI 助手走原规则模拟回答
     coze_token: str = ""
     coze_bot_id: str = ""

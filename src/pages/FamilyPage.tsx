@@ -1,44 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Users, UserPlus, Link2, Unlink, CheckCircle2, Phone, ShieldPlus,
-  Heart, Activity, Pill, Bell, AlertTriangle, ArrowRight, Info,
+  Users, UserPlus, Link2, Unlink, CheckCircle2,
+  Bell, ArrowRight, Info, Clock, X, Check,
+  LogOut, Phone, CircleUserRound, ChevronRight, KeyRound, PencilLine,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { SectionTitle } from '@/components/ui/Common';
-import { FamilyIcon, Dots } from '@/components/ui/Decorations';
-import { elderProfile, todaySchedule, healthRecords, riskAlerts } from '@/data/mockData';
+import { FAMILY_NOTIFICATIONS } from '@/data/familyDemo';
+import { familyApi, authApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export function FamilyPage() {
-  const { user, familyMembers, bindFamily, unbindFamily, showToast } = useApp();
-  const navigate = useNavigate();
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteCode, setInviteCode] = useState('');
-
-  // If family role → show family monitoring view
+  const { user } = useApp();
+  // 家属端：我的管理中心
   if (user?.role === 'family') {
-    return <FamilyMonitorView />;
+    return <FamilyMineView />;
   }
+  // 老人端：管理家属绑定（保持原样）
+  return <ElderFamilyView />;
+}
 
-  // Elder view: manage family bindings
-  const bound = familyMembers.filter((f) => f.bound);
+// ============ 老人视角：家属绑定管理（保持原样，未改动） ============
+function ElderFamilyView() {
+  const { familyMembers, incomingRequests, outgoingRequests, sendFamilyRequest, acceptFamilyRequest, rejectFamilyRequest, unbindMember, showToast } = useApp();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [account, setAccount] = useState('');
+  const [relation, setRelation] = useState('儿子');
 
   const handleInvite = async () => {
-    if (!inviteCode.trim()) { showToast('请输入家属账号', 'error'); return; }
-    await bindFamily(inviteCode.trim(), '家属');
-    setInviteOpen(false);
-    setInviteCode('');
-    showToast('家属绑定成功');
-  };
-
-  const handleUnbind = async (id: string) => {
-    await unbindFamily(id);
-    showToast('已解除绑定', 'info');
+    if (!account.trim()) { showToast('请输入对方账号', 'error'); return; }
+    const ok = await sendFamilyRequest(account.trim(), relation);
+    if (ok) { setInviteOpen(false); setAccount(''); }
   };
 
   return (
@@ -50,61 +46,115 @@ export function FamilyPage() {
         right={<Button icon={<UserPlus size={16} />} onClick={() => setInviteOpen(true)}>邀请家属</Button>}
       />
 
-      {/* Banner */}
       <Card className="p-5 bg-gradient-to-r from-sage-50/60 to-sky-50/40 border-sage-100">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-sage-100 flex items-center justify-center text-sage-600 shrink-0">
-            <FamilyIcon className="w-8 h-8" />
+            <Users className="w-8 h-8" />
           </div>
           <div>
             <h3 className="font-semibold text-sage-800">即使不在身边，家人也能安心</h3>
-            <p className="text-sm text-sage-600 mt-1">绑定家属后，家属可远程查看您的服药情况、健康数据与 AI 风险提醒。</p>
+            <p className="text-sm text-sage-600 mt-1">绑定申请发出后需对方同意，绑定成功后家属才能远程查看您的服药、健康数据与 AI 风险提醒。</p>
           </div>
         </div>
       </Card>
 
-      {/* Bound family list */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {familyMembers.map((f) => (
-          <Card key={f.id} className="p-5">
-            <div className="flex items-start justify-between">
+      {incomingRequests.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-semibold text-sage-800 flex items-center gap-2">
+            <Clock size={18} className="text-amber-500" /> 收到的绑定申请
+            <Badge level="neutral">{incomingRequests.length}</Badge>
+          </h3>
+          {incomingRequests.map((req) => (
+            <Card key={req.id} className="p-4 border-amber-200 bg-amber-50/40">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-semibold" style={{ backgroundColor: f.avatarColor }}>
-                  {f.name[0]}
+                <div className="w-11 h-11 rounded-2xl bg-sky-100 flex items-center justify-center text-sky-600 font-semibold shrink-0">
+                  {req.peerName[0]}
                 </div>
-                <div>
-                  <h3 className="font-semibold text-sage-800">{f.name}</h3>
-                  <p className="text-xs text-sage-500">{f.relationship} · {f.phone || '未填写电话'}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sage-800">{req.requesterName} <span className="text-sage-500 font-normal text-sm">请求绑定您</span></p>
+                  <p className="text-xs text-sage-500 mt-0.5">关系称呼：{req.relationship}{req.peerPhone ? ` · ${req.peerPhone}` : ''}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => rejectFamilyRequest(req.id)}>拒绝</Button>
+                  <Button size="sm" icon={<Check size={14} />} onClick={() => acceptFamilyRequest(req.id)}>同意</Button>
                 </div>
               </div>
-              {f.bound ? <Badge level="low"><CheckCircle2 size={13} /> 已绑定</Badge> : <Badge level="neutral">未绑定</Badge>}
-            </div>
-            {f.bound ? (
-              <div className="mt-4 flex items-center justify-between">
-                <span className="text-xs text-sage-500 flex items-center gap-1"><Link2 size={13} /> 实时同步健康数据</span>
-                <Button size="sm" variant="danger" icon={<Unlink size={14} />} onClick={() => handleUnbind(f.id)}>解除绑定</Button>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {outgoingRequests.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-semibold text-sage-800 flex items-center gap-2">
+            <Clock size={18} className="text-sky-500" /> 我发出的申请
+          </h3>
+          {outgoingRequests.map((req) => (
+            <Card key={req.id} className="p-4 bg-sky-50/40 border-sky-100">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-sky-100 flex items-center justify-center text-sky-600 font-semibold shrink-0">
+                  {req.peerName[0]}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-sage-800">已向 {req.peerName} 发起申请</p>
+                  <p className="text-xs text-sage-500 mt-0.5">等待对方同意 · 关系称呼：{req.relationship}</p>
+                </div>
+                <Badge level="neutral">等待同意</Badge>
               </div>
-            ) : (
-              <div className="mt-4">
-                <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => setInviteOpen(true)}>邀请绑定</Button>
-              </div>
-            )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <h3 className="font-semibold text-sage-800 flex items-center gap-2">
+          <Users size={18} className="text-sage-600" /> 已绑定家属
+        </h3>
+        {familyMembers.length === 0 ? (
+          <Card className="p-8 text-center text-sm text-sage-500">
+            还没有已绑定的家属，点右上角「邀请家属」发起绑定申请
           </Card>
-        ))}
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {familyMembers.map((f) => (
+              <Card key={f.id} className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-semibold" style={{ backgroundColor: f.avatarColor }}>
+                      {f.name[0]}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sage-800">{f.name}</h3>
+                      <p className="text-xs text-sage-500">{f.relationship} · {f.phone || '未填写电话'}</p>
+                    </div>
+                  </div>
+                  <Badge level="low"><CheckCircle2 size={13} /> 已绑定</Badge>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-xs text-sage-500 flex items-center gap-1"><Link2 size={13} /> 实时同步健康数据</span>
+                  <Button size="sm" variant="danger" icon={<Unlink size={14} />} onClick={() => unbindMember(f.id)}>解除绑定</Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Invite modal */}
       <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="邀请家属绑定" size="sm"
-        footer={<><Button variant="secondary" onClick={() => setInviteOpen(false)}>取消</Button><Button icon={<Link2 size={16} />} onClick={handleInvite}>发送邀请</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setInviteOpen(false)}>取消</Button><Button icon={<Link2 size={16} />} onClick={handleInvite}>发送申请</Button></>}>
         <div className="space-y-4">
-          <p className="text-sm text-sage-600">输入家属的手机号或邀请码，系统将向对方发送绑定邀请。</p>
+          <p className="text-sm text-sage-600">输入家属的登录账号，系统会向 TA 发送绑定申请，对方同意后即可建立绑定关系。</p>
           <div>
-            <label className="label">手机号 / 邀请码</label>
-            <input className="input" placeholder="如：138****6789" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} />
+            <label className="label">家属账号</label>
+            <input className="input" placeholder="如：family 或对方注册的账号" value={account} onChange={(e) => setAccount(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">关系称呼</label>
+            <input className="input" placeholder="如：儿子 / 女儿 / 老伴" value={relation} onChange={(e) => setRelation(e.target.value)} />
           </div>
           <div className="p-3 bg-sage-50 rounded-xl text-xs text-sage-500 flex gap-2">
             <Info size={14} className="shrink-0 mt-0.5" />
-            您的邀请码：<span className="font-mono font-semibold text-sage-700">ZH-2026-WXL</span>（可将此码告知家属）
+            申请发送后，对方在「家属监护」页会收到「XX 请求绑定您」，同意后才会共享数据。
           </div>
         </div>
       </Modal>
@@ -112,141 +162,320 @@ export function FamilyPage() {
   );
 }
 
-// ============ Family monitoring view ============
-function FamilyMonitorView() {
-  const navigate = useNavigate();
-  const taken = todaySchedule.filter((d) => d.status === 'taken').length;
-  const missed = todaySchedule.filter((d) => d.status === 'missed').length;
-  const rate = Math.round((taken / todaySchedule.length) * 100);
-  const latest = healthRecords[healthRecords.length - 1];
-  const highRisks = riskAlerts.filter((r) => r.level === 'high');
+// ============ 家属视角：我的管理中心 ============
+function FamilyMineView() {
+  const { user, outgoingRequests, incomingRequests, acceptFamilyRequest, rejectFamilyRequest, sendFamilyRequest, logout, updateUser, showToast } = useApp();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [account, setAccount] = useState('');
+  const [relation, setRelation] = useState('母亲');
+  const [noticeFilter, setNoticeFilter] = useState<'全部' | '用药' | '健康' | '家庭'>('全部');
+  const [noticeRead, setNoticeRead] = useState<Record<string, boolean>>({});
+  const [members, setMembers] = useState<{ id: string; name: string; relationship?: string; phone?: string }[]>([]);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [oldPwd, setOldPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [savingPwd, setSavingPwd] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState({ name: '', age: '', gender: '女', height: '', weight: '', blood_type: 'A', phone: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
 
-  const attentionItems = [
-    { level: 'warn', text: `今日 ${missed} 次漏服（氯氮平片）`, icon: AlertTriangle },
-    { level: 'warn', text: '前天晚间血压 142/88 mmHg，略有升高', icon: Activity },
-    { level: 'danger', text: '格列美脲与阿司匹林联用存在低血糖风险', icon: AlertTriangle },
-  ];
+  useEffect(() => {
+    familyApi.listMembers().then(setMembers).catch(() => {});
+  }, []);
+
+  const openEdit = () => {
+    setForm({
+      name: user?.name || '',
+      age: user?.age ? String(user.age) : '',
+      gender: user?.gender || '女',
+      height: user?.height ? String(user.height) : '',
+      weight: user?.weight ? String(user.weight) : '',
+      blood_type: user?.bloodType || 'A',
+      phone: user?.phone || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!form.name.trim()) { showToast('姓名不能为空', 'error'); return; }
+    setSavingProfile(true);
+    try {
+      await updateUser({
+        name: form.name.trim(),
+        age: form.age ? Number(form.age) : undefined,
+        gender: form.gender,
+        height: form.height ? Number(form.height) : undefined,
+        weight: form.weight ? Number(form.weight) : undefined,
+        bloodType: form.blood_type,
+        phone: form.phone || undefined,
+      });
+      showToast('资料已更新');
+      setEditOpen(false);
+    } catch {
+      showToast('保存失败，请重试', 'error');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!oldPwd || !newPwd || !confirmPwd) { showToast('请完整填写三项密码', 'error'); return; }
+    if (newPwd.length < 6) { showToast('新密码至少 6 位', 'error'); return; }
+    if (newPwd !== confirmPwd) { showToast('两次输入的新密码不一致', 'error'); return; }
+    setSavingPwd(true);
+    try {
+      await authApi.changePassword(oldPwd, newPwd);
+      showToast('密码已修改，请重新登录');
+      setTimeout(() => { logout(); }, 1200);
+    } catch (e: any) {
+      showToast(e?.response?.data?.detail || '修改密码失败，请检查原密码', 'error');
+    } finally {
+      setSavingPwd(false);
+    }
+  };
+
+  const notices = FAMILY_NOTIFICATIONS.filter((n) => noticeFilter === '全部' || n.category === noticeFilter);
+
+  const handleInvite = async () => {
+    if (!account.trim()) { showToast('请输入老人账号', 'error'); return; }
+    const ok = await sendFamilyRequest(account.trim(), relation);
+    if (ok) { setInviteOpen(false); setAccount(''); }
+  };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
-      <SectionTitle
-        title="家庭健康中心"
-        subtitle="远程了解家人的健康状态"
-        icon={<Users size={22} />}
-      />
-
-      {/* Elder status banner */}
-      <Card className="overflow-hidden">
-        <div className="relative p-6 bg-gradient-to-br from-sage-50/60 via-cream-50 to-sky-50/40">
-          <div className="absolute top-3 right-6 text-sage-200 deco-dots"><Dots className="w-16 h-16" /></div>
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-card" style={{ backgroundColor: elderProfile.avatarColor }}>
-              {elderProfile.name[0]}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-sage-800">{elderProfile.name}的健康状态</h2>
-                <Badge level="low"><CheckCircle2 size={13} /> 总体良好</Badge>
-              </div>
-              <p className="text-sm text-sage-500 mt-1">{elderProfile.age}岁 · 高血压 · 2型糖尿病 · 最后更新：今日 08:08</p>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="secondary" onClick={() => navigate('/health')}>查看健康数据</Button>
-              <Button size="sm" variant="secondary" onClick={() => navigate('/schedule')}>查看用药记录</Button>
-            </div>
+    <div className="max-w-4xl mx-auto space-y-5">
+      {/* 用户卡片 */}
+      <Card className="p-6 bg-gradient-to-r from-sage-700 to-sage-600 text-white">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center">
+            <CircleUserRound size={36} />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-xl font-bold">{user?.name || '王女士'}</h2>
+            <p className="text-sage-100/80 text-sm mt-0.5">子女 / 家属账户</p>
           </div>
         </div>
       </Card>
 
-      {/* Attention area */}
-      <Card className="p-5 border-amber-100 bg-amber-50/30">
-        <div className="flex items-center gap-2 mb-3">
-          <Bell size={18} className="text-amber-600" />
-          <h3 className="font-semibold text-sage-800">需要关注</h3>
-        </div>
-        <div className="space-y-2">
-          {attentionItems.map((item, i) => {
-            const Icon = item.icon;
-            return (
-              <div key={i} className={cn('flex items-center gap-3 p-3 rounded-xl border',
-                item.level === 'danger' ? 'bg-coral-50/60 border-coral-200' : 'bg-amber-50/60 border-amber-200')}>
-                <Icon size={16} className={item.level === 'danger' ? 'text-coral-600' : 'text-amber-600'} />
-                <span className="text-sm text-sage-700">{item.text}</span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<Heart size={18} />} label="服药完成率" value={`${rate}%`} subtext={`已服 ${taken}/${todaySchedule.length}`} color="sage" />
-        <StatCard icon={<Pill size={18} />} label="当前药品" value={`${todaySchedule.length}`} subtext="种药品在服" color="sky" onClick={() => navigate('/medications')} />
-        <StatCard icon={<Activity size={18} />} label="最近血压" value={`${latest.systolic}/${latest.diastolic}`} subtext="mmHg" color="coral" onClick={() => navigate('/health')} />
-        <StatCard icon={<AlertTriangle size={18} />} label="风险提醒" value={`${highRisks.length}`} subtext="项高风险" color="amber" onClick={() => navigate('/risk')} />
-      </div>
-
-      {/* Latest health metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard label="血压" value={`${latest.systolic}/${latest.diastolic}`} unit="mmHg" normal={latest.systolic < 140} />
-        <MetricCard label="血糖" value={latest.bloodSugar} unit="mmol/L" normal={latest.bloodSugar < 7} />
-        <MetricCard label="心率" value={latest.heartRate} unit="次/分" normal={latest.heartRate < 100} />
-      </div>
-
-      {/* AI risk reminders */}
+      {/* 家庭成员 */}
       <Card>
-        <CardHeader title="AI 风险提醒" subtitle="基于老人当前用药的智能分析" icon={<ShieldPlus size={18} />}
-          action={<Button size="sm" variant="ghost" onClick={() => navigate('/risk')}>查看全部 <ArrowRight size={14} /></Button>} />
-        <div className="px-5 pb-5 space-y-2">
-          {riskAlerts.filter((r) => r.level !== 'low').slice(0, 3).map((r) => (
-            <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-cream-50/50 border border-sage-50">
-              <AlertTriangle size={16} className={r.level === 'high' ? 'text-coral-600' : 'text-amber-600'} />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-sage-800">{r.type}</p>
-                <p className="text-xs text-sage-500">{r.reason}</p>
+        <div className="p-4 border-b border-sage-50 flex items-center justify-between">
+          <h3 className="font-semibold text-sage-800 flex items-center gap-2"><Users size={18} className="text-sage-600" /> 家庭成员</h3>
+          <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => setInviteOpen(true)}>添加家人</Button>
+        </div>
+        <div className="p-4 space-y-2.5">
+          {members.length === 0 && <p className="text-xs text-sage-400 py-2">还没有绑定老人，点右上角「添加家人」发起绑定。</p>}
+          {members.map((e) => (
+            <div key={e.id} className="flex items-center gap-3 p-3 rounded-xl bg-cream-50/40 border border-sage-50">
+              <div className="w-11 h-11 rounded-xl bg-sage-100 text-sage-600 flex items-center justify-center font-semibold shrink-0">
+                {e.name[0]}
               </div>
-              <Badge level={r.level}>{r.level === 'high' ? '高风险' : '中风险'}</Badge>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-sage-800">{e.name}</p>
+                <p className="text-xs text-sage-500">{e.relationship || '家人'}{e.phone ? ` · ${e.phone}` : ''}</p>
+              </div>
+              <Badge level="low"><CheckCircle2 size={12} /> 已绑定</Badge>
             </div>
           ))}
         </div>
       </Card>
 
-      <Card className="p-5 bg-sage-50/40 border-sage-100">
-        <p className="text-xs text-sage-500 flex gap-1.5">
-          <Info size={14} className="shrink-0 mt-0.5" />
-          本平台提供健康管理辅助信息，不能替代医生诊断和处方。如发现家人健康异常，请及时联系医生。
-        </p>
+      {/* 绑定申请 */}
+      <Card>
+        <div className="p-4 border-b border-sage-50">
+          <h3 className="font-semibold text-sage-800 flex items-center gap-2"><Link2 size={18} className="text-sky-600" /> 绑定申请</h3>
+        </div>
+        <div className="p-4 space-y-3">
+          {outgoingRequests.length === 0 && (
+            <p className="text-xs text-sage-400">暂无进行中的申请。点击「添加家人」发送绑定申请，老人确认后即可查看其数据。</p>
+          )}
+          {outgoingRequests.map((req) => (
+            <div key={req.id} className="flex items-center gap-3 p-3 bg-sky-50/40 rounded-xl border border-sky-100">
+              <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center font-semibold">{req.peerName[0]}</div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-sage-800">已向 {req.peerName} 发起申请</p>
+                <p className="text-xs text-sage-500">等待对方确认</p>
+              </div>
+              <Badge level="neutral">等待确认</Badge>
+            </div>
+          ))}
+          {incomingRequests.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-sage-50">
+              <p className="text-xs font-medium text-amber-600 pt-2">收到的申请</p>
+              {incomingRequests.map((req) => (
+                <div key={req.id} className="flex items-center gap-3 p-3 bg-amber-50/40 rounded-xl border border-amber-100">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-semibold">{req.peerName[0]}</div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-sage-800">{req.requesterName} 请求绑定您</p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="secondary" icon={<X size={13} />} onClick={() => rejectFamilyRequest(req.id)}>拒绝</Button>
+                    <Button size="sm" icon={<Check size={13} />} onClick={() => acceptFamilyRequest(req.id)}>同意</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Card>
+
+      {/* 消息通知 */}
+      <Card>
+        <div className="p-4 border-b border-sage-50 flex items-center justify-between">
+          <h3 className="font-semibold text-sage-800 flex items-center gap-2"><Bell size={18} className="text-amber-500" /> 消息通知</h3>
+          <button className="text-xs text-sage-500 hover:text-sage-700" onClick={() => setNoticeRead(Object.fromEntries(FAMILY_NOTIFICATIONS.map((n) => [n.id, true])))}>全部标为已读</button>
+        </div>
+        <div className="p-4">
+          <div className="flex gap-1.5 mb-3 flex-wrap">
+            {(['全部', '用药', '健康', '家庭'] as const).map((c) => (
+              <button key={c} onClick={() => setNoticeFilter(c)} className={cn('px-3 py-1.5 rounded-lg text-xs font-medium', noticeFilter === c ? 'bg-sage-600 text-white' : 'bg-cream-100 text-sage-500')}>{c}</button>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {notices.map((n) => {
+              const read = noticeRead[n.id];
+              return (
+                <div key={n.id} className={cn('flex items-start gap-2.5 p-3 rounded-xl border', read ? 'bg-cream-50/40 border-sage-50 opacity-60' : 'bg-white border-sage-100')}>
+                  <div className={cn(
+                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                    n.level === 'danger' ? 'bg-coral-100 text-coral-600' : n.level === 'warn' ? 'bg-amber-100 text-amber-600' : 'bg-sky-100 text-sky-600',
+                  )}>
+                    <Bell size={14} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-sage-800">{n.title} <span className="text-xs font-normal text-sage-400">· {n.time}</span></p>
+                    <p className="text-xs text-sage-500 mt-0.5">{n.detail}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {/* 个人信息 */}
+      <Card>
+        <div className="p-4 border-b border-sage-50">
+          <h3 className="font-semibold text-sage-800 flex items-center gap-2"><CircleUserRound size={18} className="text-sage-600" /> 个人信息</h3>
+        </div>
+        <div className="p-4 divide-y divide-sage-50">
+          <InfoRow label="姓名" value={user?.name || '未填写'} />
+          <InfoRow label="手机号" value={user?.phone || '未填写'} icon={<Phone size={13} className="text-sage-300" />} />
+          <InfoRow label="年龄" value={user?.age ? `${user.age} 岁` : '未填写'} />
+          <InfoRow label="性别" value={user?.gender || '未填写'} />
+          <InfoRow label="身高" value={user?.height ? `${user.height} cm` : '未填写'} />
+          <InfoRow label="体重" value={user?.weight ? `${user.weight} kg` : '未填写'} />
+          <InfoRow label="血型" value={user?.bloodType || '未填写'} />
+          <InfoRow label="身份" value="子女 / 家属" />
+          <button className="w-full flex items-center justify-between py-3 text-sm text-sage-700 hover:bg-sage-50 rounded-lg px-2 -mx-2 transition" onClick={openEdit}>
+            <span className="flex items-center gap-2"><PencilLine size={15} /> 编辑资料</span>
+            <ChevronRight size={15} />
+          </button>
+          <button className="w-full flex items-center justify-between py-3 text-sm text-sage-700 hover:bg-sage-50 rounded-lg px-2 -mx-2 transition" onClick={() => setPwdOpen(true)}>
+            <span className="flex items-center gap-2"><KeyRound size={15} /> 修改密码</span>
+            <ChevronRight size={15} />
+          </button>
+          <button className="w-full flex items-center justify-between py-3 text-sm text-coral-600 hover:bg-coral-50 rounded-lg px-2 -mx-2 transition" onClick={logout}>
+            <span className="flex items-center gap-2"><LogOut size={15} /> 退出登录</span>
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </Card>
+
+      {/* 编辑资料 Modal */}
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="编辑个人资料" size="sm"
+        footer={<><Button variant="secondary" onClick={() => setEditOpen(false)}>取消</Button><Button loading={savingProfile} onClick={handleSaveProfile}>保存</Button></>}>
+        <div className="space-y-3">
+          <div>
+            <label className="label">姓名</label>
+            <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">年龄</label>
+              <input type="number" className="input" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">性别</label>
+              <select className="input" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                <option value="女">女</option>
+                <option value="男">男</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">身高 (cm)</label>
+              <input type="number" className="input" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">体重 (kg)</label>
+              <input type="number" className="input" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="label">血型</label>
+            <select className="input" value={form.blood_type} onChange={(e) => setForm({ ...form, blood_type: e.target.value })}>
+              {['A','B','AB','O','未知'].map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">手机号</label>
+            <input className="input" placeholder="如：13800000000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* 修改密码 Modal */}
+      <Modal open={pwdOpen} onClose={() => setPwdOpen(false)} title="修改登录密码" size="sm"
+        footer={<><Button variant="secondary" onClick={() => setPwdOpen(false)}>取消</Button><Button loading={savingPwd} onClick={handleChangePassword}>保存新密码</Button></>}>
+        <div className="space-y-3">
+          <div>
+            <label className="label">原密码</label>
+            <input type="password" className="input" placeholder="请输入当前密码" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">新密码</label>
+            <input type="password" className="input" placeholder="至少 6 位" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">确认新密码</label>
+            <input type="password" className="input" placeholder="再次输入新密码" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* 添加家人 Modal */}
+      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="添加家人" size="sm"
+        footer={<><Button variant="secondary" onClick={() => setInviteOpen(false)}>取消</Button><Button icon={<Link2 size={16} />} onClick={handleInvite}>发送申请</Button></>}>
+        <div className="space-y-4">
+          <p className="text-sm text-sage-600">输入老人的登录账号，系统会向 TA 发送绑定申请，对方同意后您即可远程查看其用药与健康数据。</p>
+          <div>
+            <label className="label">老人账号</label>
+            <input className="input" placeholder="如：elder 或对方注册的账号" value={account} onChange={(e) => setAccount(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">关系称呼</label>
+            <input className="input" placeholder="如：母亲 / 父亲 / 爷爷" value={relation} onChange={(e) => setRelation(e.target.value)} />
+          </div>
+          <div className="p-3 bg-sage-50 rounded-xl text-xs text-sage-500 flex gap-2">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            申请发送后，老人端会收到申请，同意后才会共享数据。
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-function StatCard({ icon, label, value, subtext, color, onClick }: {
-  icon: React.ReactNode; label: string; value: string; subtext: string;
-  color: 'sage' | 'sky' | 'coral' | 'amber'; onClick?: () => void;
-}) {
-  const colorMap = {
-    sage: 'text-sage-600 bg-sage-50', sky: 'text-sky-600 bg-sky-50',
-    coral: 'text-coral-600 bg-coral-50', amber: 'text-amber-600 bg-amber-50',
-  };
+function InfoRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <Card className={cn('p-4', onClick && 'cursor-pointer hover:shadow-card transition')} >
-      <button onClick={onClick} className="w-full text-left">
-        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-3', colorMap[color])}>{icon}</div>
-        <p className="text-xs text-sage-500">{label}</p>
-        <p className="text-2xl font-bold text-sage-800 mt-1">{value}</p>
-        <p className="text-xs text-sage-400 mt-0.5">{subtext}</p>
-      </button>
-    </Card>
-  );
-}
-
-function MetricCard({ label, value, unit, normal }: { label: string; value: string | number; unit: string; normal: boolean }) {
-  return (
-    <Card className="p-4">
-      <p className="text-sm text-sage-500">{label}</p>
-      <p className="text-xl font-bold text-sage-800 mt-1">{value} <span className="text-xs font-normal text-sage-400">{unit}</span></p>
-      <p className={cn('text-xs mt-1', normal ? 'text-sage-500' : 'text-coral-600')}>{normal ? '正常范围' : '需关注'}</p>
-    </Card>
+    <div className="flex items-center justify-between py-3">
+      <span className="text-sm text-sage-500 flex items-center gap-1.5">{icon}{label}</span>
+      <span className="text-sm text-sage-800 font-medium flex items-center gap-1">
+        {value} <ArrowRight size={13} className="text-sage-300" />
+      </span>
+    </div>
   );
 }

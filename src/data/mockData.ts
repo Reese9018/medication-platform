@@ -229,10 +229,8 @@ export const riskAlerts: RiskAlert[] = [
   },
 ];
 
-export const familyMembers: FamilyMember[] = [
-  { id: 'f1', name: '李明', relationship: '儿子', role: 'family', bound: true, avatarColor: '#3A85A8', phone: '138****6789' },
-  { id: 'f2', name: '李华', relationship: '女儿', role: 'family', bound: false, avatarColor: '#D2624A' },
-];
+// 未登录/未拉取时为空，登录后由后端 /family/members 填充
+export const familyMembers: FamilyMember[] = [];
 
 export const notifications: AppNotification[] = [
   { id: 'n1', title: '漏服提醒', detail: '昨晚 22:00 氯氮平片未按时服用', level: 'warn', time: '今日 08:00', read: false },

@@ -8,6 +8,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
 import { useApp } from '@/context/AppContext';
+import type { HealthRecord } from '@/types';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ProgressRing } from '@/components/ui/ProgressRing';
@@ -16,6 +17,7 @@ import { DoseItem } from '@/components/DoseItem';
 import { weeklyTrend } from '@/data/mockData';
 import { generateRisks } from '@/lib/riskEngine';
 import { Blob, HeartPulseIcon, PillIcon, LeafIcon, WaveLine, Dots } from '@/components/ui/Decorations';
+import { FamilyHomeView } from './family/FamilyHomeView';
 
 const periodMeta = {
   morning: { label: '早晨', emoji: '🌅', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
@@ -40,9 +42,15 @@ export function HomePage() {
   // 动态生成用药风险（结合用户健康档案 + 用药列表）
   const riskAlerts = useMemo(() => generateRisks(user, medications).alerts, [user, medications]);
 
-  const latest = healthRecords[healthRecords.length - 1];
+  // 取日期最新的健康记录（与接口返回顺序无关），无记录时为 null
+  const latest = healthRecords.reduce<HealthRecord | null>((max, r) => !max || r.date > max.date || (r.date === max.date && r.time > max.time) ? r : max, null);
   const highRisks = riskAlerts.filter((r) => r.level === 'high');
   const midRisks = riskAlerts.filter((r) => r.level === 'mid');
+
+  // family 角色：子女端首页（欢迎区 + 成员概览 + 今日用药 + 异常提醒）
+  if (user?.role === 'family') {
+    return <FamilyHomeView />;
+  }
 
   const handleAiSchedule = () => {
     setAiLoading(true);
@@ -144,9 +152,9 @@ export function HomePage() {
             <span className="text-sm font-medium text-sage-700">健康指标</span>
           </div>
           <div className="space-y-2.5">
-            <MetricRow label="血压" value={`${latest.systolic}/${latest.diastolic}`} unit="mmHg" color="sage" />
-            <MetricRow label="血糖" value={latest.bloodSugar} unit="mmol/L" color="sky" />
-            <MetricRow label="心率" value={latest.heartRate} unit="次/分" color="coral" />
+            <MetricRow label="血压" value={latest ? `${latest.systolic}/${latest.diastolic}` : '--/--'} unit="mmHg" color="sage" />
+            <MetricRow label="血糖" value={latest ? latest.bloodSugar : '--'} unit="mmol/L" color="sky" />
+            <MetricRow label="心率" value={latest ? latest.heartRate : '--'} unit="次/分" color="coral" />
           </div>
         </Card>
       </div>

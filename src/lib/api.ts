@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   AppNotification,
   FamilyMember,
+  FamilyRequest,
   HealthRecord,
   Medication,
   ReportData,
@@ -10,11 +11,11 @@ import type {
   UserProfile,
 } from '@/types';
 
-// 生产构建且未显式指定 VITE_API_URL 时，使用同源相对路径（前后端一体部署）
-// 本地开发（vite dev 5173 端口）继续指向本地后端 8000 端口
-const apiBaseURL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
+// 默认走相对路径 /api/v1，统一由反向代理转发到后端：
+//   - 生产构建（同源部署）：由 nginx / 单 docker 容器把 /api 反代到后端
+//   - vite dev：vite.config.ts 的 server.proxy['/api'] 把 /api 转给 localhost:8000
+// 留 VITE_API_URL 给自定义部署（如直接跨域打后端 IP）覆盖
+const apiBaseURL = import.meta.env.VITE_API_URL || '/api/v1';
 
 const api = axios.create({
   baseURL: apiBaseURL,
@@ -52,14 +53,38 @@ export interface UserUpdatePayload {
   height?: number;
   weight?: number;
   bloodType?: string;
+  phone?: string;
   chronicConditions?: string[];
   allergies?: string[];
   emergencyContact?: string;
 }
 
-export interface FamilyBindPayload {
-  familyAccount: string;
+export interface FamilyRequestPayload {
+  account: string;
   relationship: string;
+}
+
+/** 家属端查看老人真实数据的返回结构 */
+export interface ElderOverview {
+  id: number;
+  name: string;
+  age: number;
+  gender: string;
+  avatar_color: string;
+  relationship: string;
+  chronic_conditions: string[];
+  allergies: string[];
+  blood_type: string;
+  emergency_contact: string | null;
+  today_doses: { time: string; name: string; dosage: string; status: 'taken' | 'pending' | 'missed'; period: string }[];
+  today_rate: number;
+  today_taken: number;
+  today_total: number;
+  medications: { id: number; name: string; generic_name?: string; spec: string; dosage: string; freq: string; times: string; category: string }[];
+  health_records: { date: string; time: string; systolic: number; diastolic: number; blood_sugar: number; heart_rate: number }[];
+  latest_bp: string;
+  latest_sugar: number | null;
+  latest_hr: number | null;
 }
 
 function toUser(data: Record<string, unknown>): UserProfile {
@@ -70,6 +95,7 @@ function toUser(data: Record<string, unknown>): UserProfile {
     chronicConditions: Array.isArray(data.chronic_conditions) ? data.chronic_conditions.map(String) : [],
     allergies: Array.isArray(data.allergies) ? data.allergies.map(String) : [], bloodType: String(data.blood_type ?? ''),
     emergencyContact: data.emergency_contact ? String(data.emergency_contact) : undefined,
+    phone: data.phone ? String(data.phone) : undefined,
     createdAt: String(data.created_at ?? ''),
   };
 }
@@ -107,8 +133,10 @@ function toRisk(data: Record<string, unknown>): RiskAlert {
 }
 
 export const authApi = {
-  async login(account: string, password: string): Promise<UserProfile> {
-    const { data } = await api.post('/auth/login', { account, password });
+  async login(account: string, password: string, role?: 'elder' | 'family'): Promise<UserProfile> {
+    // 前端传 role 仅为防御性校验：账号若不属于所选身份，后端会 403，
+    // 防止「切到家属性，账号字段却还残留老人默认」这种误登场景
+    const { data } = await api.post('/auth/login', { account, password, role });
     localStorage.setItem('zhiyouyao_token', data.access_token);
     return toUser(data.user);
   },
@@ -118,6 +146,9 @@ export const authApi = {
     return toUser(data.user);
   },
   async me(): Promise<UserProfile> { const { data } = await api.get('/auth/me'); return toUser(data); },
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    await api.post('/auth/change-password', { old_password: oldPassword, new_password: newPassword });
+  },
   logout(): void { localStorage.removeItem('zhiyouyao_token'); },
 };
 
@@ -125,7 +156,7 @@ export const userApi = {
   async update(payload: UserUpdatePayload): Promise<UserProfile> {
     const { data } = await api.patch('/users/me', {
       ...payload, blood_type: payload.bloodType, chronic_conditions: payload.chronicConditions,
-      emergency_contact: payload.emergencyContact,
+      emergency_contact: payload.emergencyContact, phone: payload.phone,
     });
     return toUser(data);
   },
@@ -177,13 +208,65 @@ export const assistantApi = {
   },
 };
 
+function toFamilyMember(data: Record<string, unknown>): FamilyMember {
+  return {
+    id: String(data.id),
+    name: String(data.name ?? ''),
+    relationship: String(data.relationship ?? '家属'),
+    role: data.role === 'family' ? 'family' : 'elder',
+    status: data.status === 'active' ? 'active' : data.status === 'pending' ? 'pending' : 'rejected',
+    avatarColor: data.role === 'family' ? '#3A85A8' : '#4A8265',
+    phone: data.phone ? String(data.phone) : undefined,
+  };
+}
+
+function toFamilyRequest(data: Record<string, unknown>): FamilyRequest {
+  return {
+    id: String(data.id),
+    peerId: String(data.peer_id),
+    peerName: String(data.peer_name ?? ''),
+    peerRole: data.peer_role === 'family' ? 'family' : 'elder',
+    peerPhone: data.peer_phone ? String(data.peer_phone) : undefined,
+    relationship: String(data.relationship ?? '家属'),
+    status: data.status === 'pending' ? 'pending' : data.status === 'active' ? 'active' : 'rejected',
+    requesterId: String(data.requester_id),
+    requesterName: String(data.requester_name ?? ''),
+    direction: data.direction === 'outgoing' ? 'outgoing' : 'incoming',
+    createdAt: String(data.created_at ?? ''),
+  };
+}
+
 export const familyApi = {
-  async list(): Promise<FamilyMember[]> {
+  async listMembers(): Promise<FamilyMember[]> {
     const { data } = await api.get('/family/members');
-    return data.map((item: Record<string, unknown>) => ({ id: String(item.id), name: String(item.name), relationship: String(item.relationship), role: item.role === 'family' ? 'family' : 'elder', bound: Boolean(item.bound), avatarColor: '#3A85A8', phone: item.phone ? String(item.phone) : undefined }));
+    return data.map(toFamilyMember);
   },
-  async bind(payload: FamilyBindPayload): Promise<FamilyMember> { const { data } = await api.post('/family/bind', { family_account: payload.familyAccount, relationship: payload.relationship }); return { id: String(data.id), name: String(data.name), relationship: String(data.relationship), role: 'family', bound: true, avatarColor: '#3A85A8', phone: data.phone ? String(data.phone) : undefined }; },
-  async unbind(id: string): Promise<void> { await api.delete(`/family/bind/${id}`); },
+  /** 家属查看某位绑定老人的真实数据（资料/今日用药/药品/健康记录） */
+  async elderOverview(elderId: string | number): Promise<ElderOverview> {
+    const { data } = await api.get(`/family/elders/${elderId}/overview`);
+    return data;
+  },
+  async listIncoming(): Promise<FamilyRequest[]> {
+    const { data } = await api.get('/family/requests/incoming');
+    return data.map(toFamilyRequest);
+  },
+  async listOutgoing(): Promise<FamilyRequest[]> {
+    const { data } = await api.get('/family/requests/outgoing');
+    return data.map(toFamilyRequest);
+  },
+  async createRequest(payload: FamilyRequestPayload): Promise<FamilyRequest> {
+    const { data } = await api.post('/family/requests', { account: payload.account, relationship: payload.relationship });
+    return toFamilyRequest(data);
+  },
+  async acceptRequest(id: string): Promise<void> {
+    await api.post(`/family/requests/${id}/accept`);
+  },
+  async rejectRequest(id: string): Promise<void> {
+    await api.post(`/family/requests/${id}/reject`);
+  },
+  async unbind(peerId: string): Promise<void> {
+    await api.delete(`/family/members/${peerId}`);
+  },
 };
 
 export const notificationApi = {

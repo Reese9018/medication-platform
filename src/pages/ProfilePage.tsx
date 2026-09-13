@@ -12,7 +12,7 @@ import type { UserProfile } from '@/types';
 import { getRoleAvatarUrl } from '@/lib/utils';
 
 export function ProfilePage() {
-  const { user, medications, showToast } = useApp();
+  const { user, medications, updateUser, showToast } = useApp();
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<UserProfile | null>(null);
 
@@ -20,8 +20,9 @@ export function ProfilePage() {
   const activeMeds = medications.filter((m) => m.status === 'active');
 
   const openEdit = () => { setForm({ ...user }); setEditOpen(true); };
-  const handleSave = () => {
-    showToast('健康档案已更新');
+  const handleSave = async () => {
+    if (!form) return;
+    await updateUser(form);
     setEditOpen(false);
   };
 

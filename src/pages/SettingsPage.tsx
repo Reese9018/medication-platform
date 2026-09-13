@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import {
   Settings, Contrast, EyeOff, Volume2, Bell, Shield, Smartphone, Globe, Moon, Info,
-  Check, Wand2,
+  Check, Wand2, KeyRound,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { authApi } from '@/lib/api';
 import { SectionTitle } from '@/components/ui/Common';
 import { cn } from '@/lib/utils';
 
@@ -65,7 +68,27 @@ const ACCENT = {
 };
 
 export function SettingsPage() {
-  const { settings, updateSettings, speak, showToast } = useApp();
+  const { settings, updateSettings, speak, showToast, logout } = useApp();
+  const [oldPwd, setOldPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [savingPwd, setSavingPwd] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!oldPwd || !newPwd || !confirmPwd) { showToast('请完整填写三项密码', 'error'); return; }
+    if (newPwd.length < 6) { showToast('新密码至少 6 位', 'error'); return; }
+    if (newPwd !== confirmPwd) { showToast('两次输入的新密码不一致', 'error'); return; }
+    setSavingPwd(true);
+    try {
+      await authApi.changePassword(oldPwd, newPwd);
+      showToast('密码已修改，请重新登录');
+      setTimeout(() => { logout(); }, 1200);
+    } catch (e: any) {
+      showToast(e?.response?.data?.detail || '修改密码失败，请检查原密码', 'error');
+    } finally {
+      setSavingPwd(false);
+    }
+  };
 
   const toggle = (key: FeatureKey) => {
     const next = !settings[key];
@@ -188,6 +211,34 @@ export function SettingsPage() {
             <StaticRow icon={<Bell size={18} />} title="用药提醒" desc="按时提醒服药" />
             <StaticRow icon={<Shield size={18} />} title="风险预警" desc="AI 风险分析结果推送" />
             <StaticRow icon={<Smartphone size={18} />} title="家属同步" desc="健康数据同步给绑定家属" />
+          </div>
+        </Card>
+      </div>
+
+      {/* ===== 账号安全 / 修改密码 ===== */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sage-600"><KeyRound size={18} /></span>
+          <h2 className="font-semibold text-sage-800">账号安全</h2>
+        </div>
+        <Card>
+          <CardHeader title="修改登录密码" subtitle="为保障账号安全，建议定期更换密码" icon={<KeyRound size={18} />} />
+          <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="label">原密码</label>
+              <input type="password" className="input" placeholder="请输入当前密码" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">新密码</label>
+              <input type="password" className="input" placeholder="至少 6 位" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">确认新密码</label>
+              <input type="password" className="input" placeholder="再次输入新密码" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
+            </div>
+          </div>
+          <div className="px-5 pb-5">
+            <Button onClick={handleChangePassword} loading={savingPwd}>保存新密码</Button>
           </div>
         </Card>
       </div>

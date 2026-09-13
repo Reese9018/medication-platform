@@ -15,6 +15,7 @@ export interface UserProfile {
   allergies: string[];
   bloodType: string;
   emergencyContact?: string;
+  phone?: string;
   createdAt: string;
 }
 
@@ -94,14 +95,34 @@ export interface AICard {
   actions?: { label: string; to?: string }[];
 }
 
+// 家庭绑定关系三态
+// pending  —— 申请中：一方发起，等另一方同意，双方互不可见数据
+// active   —— 已绑定：家属可查看老人授权数据
+// rejected —— 已拒绝/已解除
+export type FamilyLinkStatus = 'pending' | 'active' | 'rejected';
+
 export interface FamilyMember {
   id: string;
   name: string;
   relationship: string; // 关系
   role: UserRole;
-  bound: boolean;
+  status: FamilyLinkStatus;
   avatarColor: string;
   phone?: string;
+}
+
+export interface FamilyRequest {
+  id: string;
+  peerId: string;        // 相对方 id（incoming=申请人；outgoing=被申请人）
+  peerName: string;
+  peerRole: UserRole;
+  peerPhone?: string;
+  relationship: string;
+  status: FamilyLinkStatus;
+  requesterId: string;
+  requesterName: string;
+  direction: 'incoming' | 'outgoing'; // incoming=等我处理；outgoing=我发出的
+  createdAt: string;
 }
 
 export interface AppNotification {
