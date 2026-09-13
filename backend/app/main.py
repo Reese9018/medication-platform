@@ -13,8 +13,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    run_legacy_migrations()
+    # 生产（SKIP_DB_INIT=1）跳过 create_all / migrations，缩短冷启动；seed 幂等保留
+    if not settings.skip_db_init:
+        Base.metadata.create_all(bind=engine)
+        run_legacy_migrations()
     with SessionLocal() as db:
         seed_demo_data(db)
     yield

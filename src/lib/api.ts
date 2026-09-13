@@ -20,6 +20,8 @@ const apiBaseURL = import.meta.env.VITE_API_URL || '/api/v1';
 const api = axios.create({
   baseURL: apiBaseURL,
   headers: { 'Content-Type': 'application/json' },
+  // 15 秒超时：冷启动/网络慢时快速失败并提示，而不是一直转圈
+  timeout: 15000,
 });
 
 api.interceptors.request.use((config) => {

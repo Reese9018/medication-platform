@@ -22,12 +22,17 @@ from app.main import app  # noqa: E402  FastAPI 实例（顶层变量名必须�
 
 # ---- 幂等初始化：确保云端数据表 + 演示账号（elder/123456 等）就绪 ----
 # 函数冷启动不一定会触发 FastAPI lifespan，因此在模块导入时
-# 幂等地执行一次「建表 + 演示数据」初始化；seed 自带 count 检查，重复执行安全。
+# 幂等地执行一次初始化；seed 自带 count 检查，重复执行安全。
+# 生产（Vercel）设置 SKIP_DB_INIT=1 时跳过 create_all / migrations（表结构已就绪），
+# 大幅缩短冷启动时间；seed 仍执行，维护演示账号与今日用药数据。
 try:
-    from app.database import Base, engine, SessionLocal  # noqa: E402
+    from app.database import Base, engine, SessionLocal, run_legacy_migrations  # noqa: E402
     from app.services.seed import seed_demo_data  # noqa: E402
+    from app.config import get_settings  # noqa: E402
 
-    Base.metadata.create_all(bind=engine)
+    if not get_settings().skip_db_init:
+        Base.metadata.create_all(bind=engine)
+        run_legacy_migrations()
     with SessionLocal() as db:
         seed_demo_data(db)
 except Exception:

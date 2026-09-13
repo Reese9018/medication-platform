@@ -8,7 +8,17 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(get_settings().database_url, pool_pre_ping=True, future=True)
+engine = create_engine(
+    get_settings().database_url,
+    pool_pre_ping=True,
+    future=True,
+    # Neon 服务端约 5 分钟回收空闲连接：300s 前主动重建，避免预检重连拖慢请求
+    pool_recycle=300,
+    # 池满时最多等 15 秒拿连接，超时快速失败而非无限挂起
+    pool_timeout=15,
+    # 连接建连/握手最多 5 秒，避免网络抖动把请求卡死
+    connect_args={"connect_timeout": 5},
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
