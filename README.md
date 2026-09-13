@@ -10,6 +10,8 @@ pinned: false
 
 # 智药护航 · AI 智能用药管理平台
 
+> Vercel 部署：api/index.py 为 Python 入口（functions + includeFiles 配置），rewrites 仅做 SPA fallback，/api/* 由 Vercel 自动路由到 FastAPI。
+
 面向老年人的智能用药管理系统。React 前端 + FastAPI 后端 + PostgreSQL，**前后端同源一体部署**（FastAPI 直接托管前端构建产物，单网址访问，无 CORS 问题）。
 
 ## 在线访问
