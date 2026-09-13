@@ -28,6 +28,15 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allo
 def health_check():
     return {"status": "ok", "service": settings.app_name}
 
+
+@app.get("/api/keepalive", include_in_schema=False)
+def keepalive():
+    """Vercel cron 每 4 分钟调用一次：轻量 DB 查询，防止 Neon 5 分钟自动休眠。"""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"status": "ok"}
+
 prefix = "/api/v1"
 app.include_router(auth.router, prefix=prefix)
 app.include_router(users.router, prefix=prefix)
