@@ -48,3 +48,5 @@ login_error.png
 
 # WorkBuddy local assistant memory
 .workbuddy/
+.vercel
+.env*
