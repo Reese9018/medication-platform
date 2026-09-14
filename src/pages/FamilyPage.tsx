@@ -204,7 +204,7 @@ function FamilyMineView() {
       await updateUser({
         name: form.name.trim(),
         age: form.age ? Number(form.age) : undefined,
-        gender: form.gender,
+        gender: form.gender === '男' ? '男' : '女',
         height: form.height ? Number(form.height) : undefined,
         weight: form.weight ? Number(form.weight) : undefined,
         bloodType: form.blood_type,

@@ -279,12 +279,31 @@ export const mockOCRResult = {
   precaution: '注意监测血压，避免与钾盐或保钾利尿剂合用；可能引起干咳。',
 };
 
-// Mock AI assistant canned responses
-export const aiQuickQuestions = [
-  '我今天应该吃哪些药？',
-  '这个药有什么作用？',
-  '我漏服了一次怎么办？',
-  '这个水果可以和我的药一起吃吗？',
-  '我的血压最近正常吗？',
-  '我的药一起吃会有冲突吗？',
+// AI 助手快捷问题：按场景分组。
+// 之前只有 6 条平铺的固定问题，老人会以为「这个助手只能问这几句」，问点别的就没反应。
+// 分组之后一方面覆盖的场景更全，另一方面也在暗示「各个方面都可以问」。
+export const aiQuickQuestionGroups: { label: string; questions: string[] }[] = [
+  {
+    label: '我的用药',
+    questions: ['我今天应该吃哪些药？', '我漏服了一次怎么办？', '这些药一起吃会冲突吗？', '我老是忘记吃药怎么办？'],
+  },
+  {
+    label: '药的作用',
+    questions: ['硝苯地平是治什么的？', '二甲双胍怎么吃？', '阿司匹林有什么副作用？'],
+  },
+  {
+    label: '身体指标',
+    questions: ['我最近的血压怎么样？', '我的血糖控制得好吗？', '我的心率正常吗？'],
+  },
+  {
+    label: '吃喝与生活',
+    questions: ['可以喝牛奶吗？', '能吃葡萄柚吗？', '我可以做什么运动？', '晚上睡不着怎么办？'],
+  },
+  {
+    label: '安全提醒',
+    questions: ['我平时要注意什么？', '能不能自己停药或减量？', '去医院复查要准备什么？'],
+  },
 ];
+
+// 兼容旧引用：平铺的全部快捷问题
+export const aiQuickQuestions = aiQuickQuestionGroups.flatMap((group) => group.questions);

@@ -21,7 +21,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        proxyTimeout: 30000,
+        // AI 助手要等大模型生成回答（实测 8~50 秒），代理超时必须比它更宽，
+        // 否则回答还在生成、代理已经把连接切断，前端只会看到「助手无法连接」
+        proxyTimeout: 180000,
+        timeout: 180000,
         // 当后端没跑（ECONNREFUSED）时，vite 默认抛 500 烂码，
         // 我们拦截并改写成 503 + 结构化 detail，让前端 toast 给出精准指引
         configure: (proxy) => {

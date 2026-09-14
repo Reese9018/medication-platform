@@ -58,12 +58,12 @@ export function FamilyMedsView() {
         status: 'active',
         riskLevel: 'low',
         category: form.category,
-        notes: null,
+        notes: undefined,
         startDate: new Date().toISOString().slice(0, 10),
-        endDate: null,
+        endDate: undefined,
         remindBeforeMinutes: 30,
         contraindications: [],
-        precautions: null,
+        precautions: undefined,
       });
       showToast('已为老人添加用药计划');
       setAddOpen(false);
@@ -171,7 +171,7 @@ function PlanTab({ elder, onAdd }: { elder: ElderOverview; onAdd: () => void }) 
                 <p className="text-xs text-sage-400">{dose.dosage}</p>
               </div>
               <button className="p-1.5 rounded-lg text-sage-400 hover:text-sage-700 hover:bg-sage-50" title="编辑"><Pencil size={14} /></button>
-              <Badge level={done ? 'low' : pending ? 'mid' : 'danger'}>{done ? '已服用' : pending ? '尚未确认' : '漏服'}</Badge>
+              <Badge level={done ? 'low' : pending ? 'mid' : 'high'}>{done ? '已服用' : pending ? '尚未确认' : '漏服'}</Badge>
             </div>
           );
         })}

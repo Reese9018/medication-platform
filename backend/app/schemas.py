@@ -85,9 +85,30 @@ class AICard(BaseModel):
     title: str; detail: str | None = None; level: RiskLevel | None = None
     medications: list[str] | None = None; actions: list[dict[str, str | None]] | None = None
 
+class AssistantProfileSummary(BaseModel):
+    """助手页展示用：「AI 已读到的老人档案」摘要。
+
+    原来的助手页只有一句「AI 已读取您的健康档案」，用户看不到 AI 到底掌握了什么，
+    也没有任何地方提示档案缺项。现在把档案内容 + 完整度 + 缺哪些字段一并返回。
+    """
+    name: str; age: int | None = None; gender: str = ""
+    height: float | None = None; weight: float | None = None; blood_type: str = ""
+    chronic_conditions: list[str] = []; allergies: list[str] = []
+    emergency_contact: str = ""
+    active_medication_count: int = 0
+    today_total: int = 0; today_taken: int = 0; today_pending: int = 0; today_missed: int = 0
+    latest_bp: str = ""; latest_blood_sugar: float | None = None; latest_heart_rate: float | None = None
+    record_count: int = 0; risk_count: int = 0
+    completeness: int = 0; missing_fields: list[str] = []
+
 class AssistantResponse(BaseModel):
     content: str; cards: list[AICard]
     conversation_id: str | None = Field(default=None, description="扣子会话ID，前端保存后下次请求带上")
+    source: Literal["ai", "local"] = Field(
+        default="ai",
+        description="回答来源：ai=扣子智能体；local=后端本地应答引擎（扣子未配置/超时/断网时兜底）",
+    )
+    profile: AssistantProfileSummary | None = Field(default=None, description="当前用户的档案摘要，供助手页展示")
 
 class FamilyRequestCreate(BaseModel):
     """发起绑定申请：输入对方账号（account）。"""

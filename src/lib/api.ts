@@ -24,16 +24,58 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// AI 助手的回答要经过大模型生成，实测耗时 8~50 秒（扣子智能体还要轮询会话状态），
+// 沿用上面的 15 秒会在回答生成到一半时被 axios 主动中断，前端只能提示「助手无法连接」，
+// 用户看到的现象就是「问了不回答」。这里给助手单独放宽到 120 秒。
+const ASSISTANT_TIMEOUT_MS = 120000;
+const assistantApiClient = axios.create({
+  baseURL: apiBaseURL,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: ASSISTANT_TIMEOUT_MS,
+});
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('zhiyouyao_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+assistantApiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('zhiyouyao_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export interface AssistantProfileSummary {
+  name: string;
+  age: number | null;
+  gender: string;
+  height: number | null;
+  weight: number | null;
+  blood_type: string;
+  chronic_conditions: string[];
+  allergies: string[];
+  emergency_contact: string;
+  active_medication_count: number;
+  today_total: number;
+  today_taken: number;
+  today_pending: number;
+  today_missed: number;
+  latest_bp: string;
+  latest_blood_sugar: number | null;
+  latest_heart_rate: number | null;
+  record_count: number;
+  risk_count: number;
+  completeness: number;
+  missing_fields: string[];
+}
+
 export interface AssistantResponse {
   content: string;
   cards: NonNullable<import('@/types').AIMessage['cards']>;
   conversation_id?: string; // 扣子会话ID，首轮由后端返回，后续轮次带上以维持上下文
+  source?: 'ai' | 'local'; // ai=扣子智能体；local=后端本地应答引擎兜底
+  profile?: AssistantProfileSummary | null; // 当前用户档案摘要，供助手页展示
 }
 
 // AI 拍照识别药品返回的结构化结果（与后端 OCRResult 对应）
@@ -205,7 +247,15 @@ export const riskApi = { async list(): Promise<RiskAlert[]> { const { data } = a
 
 export const assistantApi = {
   async chat(question: string, conversationId?: string): Promise<AssistantResponse> {
-    const { data } = await api.post('/assistant/chat', { question, conversation_id: conversationId ?? null });
+    const { data } = await assistantApiClient.post('/assistant/chat', {
+      question,
+      conversation_id: conversationId ?? null,
+    });
+    return data;
+  },
+  /** 进入助手页时拉取「AI 已读到的档案」摘要，不必先提一个问题 */
+  async profile(): Promise<AssistantProfileSummary> {
+    const { data } = await assistantApiClient.get('/assistant/profile');
     return data;
   },
 };

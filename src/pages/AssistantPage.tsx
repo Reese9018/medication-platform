@@ -1,133 +1,158 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bot, Send, Sparkles, Pill, ShieldAlert, Lightbulb, ArrowRight,
-  FileText, Activity, User, Stethoscope, RotateCcw,
+  Activity, User, Stethoscope, RotateCcw, ClipboardList, ChevronDown, ChevronUp,
+  WifiOff, RefreshCw, Loader2, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge, RiskBadge } from '@/components/ui/Badge';
+import { RichText } from '@/components/ui/RichText';
 import { useApp } from '@/context/AppContext';
-import { aiQuickQuestions } from '@/data/mockData';
+import { aiQuickQuestionGroups } from '@/data/mockData';
+import { assistantApi, type AssistantProfileSummary } from '@/lib/api';
+import { answerLocally, localProfileSummary } from '@/lib/localAssistant';
 import type { AIMessage, AICard } from '@/types';
 import { cn } from '@/lib/utils';
 
-const initialMessages: AIMessage[] = [
-  {
-    id: 'init',
-    role: 'assistant',
-    content: '您好，我是您的私人用药助手。我已读取您的健康档案、当前药品与近期健康数据，可以为您解答用药相关问题。',
-    timestamp: new Date().toISOString(),
-  },
-];
+/** 助手回答的来源：ai = 扣子智能体；local = 后端/前端本地应答引擎兜底 */
+interface ChatMessage extends AIMessage {
+  source?: 'ai' | 'local';
+}
 
-// Canned AI responses keyed by question keywords
-function generateAIResponse(question: string): { content: string; cards: AICard[] } {
-  const q = question;
-  if (q.includes('今天') || q.includes('吃哪些药')) {
-    return {
-      content: '根据您今日的用药计划，共需服用 7 次药品，分布在 4 个时间段。早晨 4 种、午间 1 种、晚间 1 种、睡前 1 种。',
-      cards: [
-        { type: 'medication', title: '早晨 08:00', detail: '硝苯地平缓释片、二甲双胍缓释片、阿司匹林肠溶片、格列美脲片', medications: ['硝苯地平缓释片', '二甲双胍缓释片', '阿司匹林肠溶片', '格列美脲片'] },
-        { type: 'medication', title: '睡前 22:00', detail: '氯氮平片 0.5片（注意：昨日漏服，今日请按时服用）', medications: ['氯氮平片'] },
-        { type: 'action', title: '查看完整用药计划', actions: [{ label: '前往用药计划', to: '/schedule' }] },
-      ],
-    };
+const WELCOME_ID = 'welcome';
+
+/**
+ * 欢迎语带出「我读到了什么」。
+ * 之前是一句写死的「我已读取您的健康档案」，老人既看不到读到了什么，也看不出档案缺了什么。
+ */
+function buildWelcome(profile: AssistantProfileSummary | null): string {
+  if (!profile) {
+    return '您好，我是您的 AI 用药助手。我正在读取您的健康档案，您可以先把想问的说给我听。';
   }
-  if (q.includes('作用')) {
-    return {
-      content: '您正在服用的药品主要分为三类：降压药、降糖药和心血管防护药。以下是各药品的主要作用：',
-      cards: [
-        { type: 'medication', title: '硝苯地平缓释片', detail: '钙通道阻滞剂，通过扩张血管降低血压，用于治疗高血压。', medications: ['硝苯地平缓释片'] },
-        { type: 'medication', title: '二甲双胍缓释片', detail: '改善胰岛素抵抗，减少肝脏葡萄糖输出，用于2型糖尿病。', medications: ['二甲双胍缓释片'] },
-        { type: 'medication', title: '格列美脲片', detail: '促进胰岛β细胞分泌胰岛素，降低血糖。', medications: ['格列美脲片'] },
-      ],
-    };
+  const facts: string[] = [];
+  if (profile.age) facts.push(`年龄 ${profile.age} 岁`);
+  if (profile.chronic_conditions.length) facts.push(`慢性病史：${profile.chronic_conditions.join('、')}`);
+  if (profile.allergies.length) facts.push(`过敏史：${profile.allergies.join('、')}`);
+  if (profile.active_medication_count) facts.push(`在服药品 ${profile.active_medication_count} 种`);
+  if (profile.latest_bp) facts.push(`最近一次血压 ${profile.latest_bp} mmHg`);
+  if (profile.today_total) facts.push(`今天的药已服 ${profile.today_taken}/${profile.today_total} 次`);
+
+  const lines = [`${profile.name}您好，我是您的 AI 用药助手。您的健康档案我已经读到了：`];
+  if (facts.length) lines.push(facts.map((f) => `- ${f}`).join('\n'));
+  lines.push('不用只挑固定的几个问题。用药、指标、吃喝、心情、复查，想到什么直接问我就行。');
+  if (profile.missing_fields.length) {
+    lines.push(`（小提醒：您的档案还缺 ${profile.missing_fields.join('、')}，补上之后我给的建议会更贴合您的情况。）`);
   }
-  if (q.includes('漏服')) {
-    return {
-      content: '漏服药品的处理需根据药品类型判断。针对您的情况，给出以下建议：',
-      cards: [
-        { type: 'risk', title: '氯氮平片（昨晚漏服）', level: 'mid', detail: '若漏服时间接近下一次服药时间，不建议补服，按原计划继续即可。切勿一次服用双倍剂量。' },
-        { type: 'tip', title: '降压药漏服原则', detail: '硝苯地平缓释片若漏服不超过2小时，可立即补服；若已接近下次服药时间，跳过漏服剂量。' },
-        { type: 'risk', title: '降糖药漏服注意', level: 'high', detail: '格列美脲片漏服后切勿自行加倍剂量，否则可能导致严重低血糖。建议监测血糖后决定。' },
-        { type: 'action', title: '建议操作', actions: [{ label: '查看用药计划', to: '/schedule' }, { label: '咨询风险分析', to: '/risk' }] },
-      ],
-    };
-  }
-  if (q.includes('水果') || q.includes('葡萄柚') || q.includes('食物')) {
-    return {
-      content: '部分食物会与您服用的药品产生相互作用，需要特别注意：',
-      cards: [
-        { type: 'risk', title: '葡萄柚 / 西柚汁', level: 'high', detail: '葡萄柚会抑制肝脏代谢酶，显著升高硝苯地平血药浓度，可能引起血压过低。服用降压药期间应避免食用。', medications: ['硝苯地平缓释片'] },
-        { type: 'tip', title: '高糖水果', detail: '西瓜、葡萄等高糖水果可能影响血糖控制，建议适量食用并在餐后监测血糖。', medications: ['格列美脲片', '二甲双胍缓释片'] },
-        { type: 'tip', title: '建议水果', detail: '苹果、梨、柚子（非葡萄柚）等低升糖指数水果较为适宜，建议在两餐之间食用。' },
-      ],
-    };
-  }
-  if (q.includes('血压')) {
-    return {
-      content: '根据您近 7 天的健康数据，血压整体较为稳定，但有一次晚间血压略高。',
-      cards: [
-        { type: 'health', title: '近 7 天血压趋势', detail: '收缩压平均 133 mmHg，舒张压平均 83 mmHg，整体在合理范围。' },
-        { type: 'risk', title: '需关注', level: 'mid', detail: '前天晚间血压 142/88 mmHg，略有升高，建议持续关注睡前血压。' },
-        { type: 'action', title: '查看详细数据', actions: [{ label: '前往健康数据', to: '/health' }] },
-      ],
-    };
-  }
-  if (q.includes('冲突') || q.includes('一起吃') || q.includes('相互作用')) {
-    return {
-      content: 'AI 已分析您当前 5 种药品的相互作用，发现 2 项高风险与 2 项中风险因素：',
-      cards: [
-        { type: 'risk', title: '格列美脲 + 阿司匹林', level: 'high', detail: '阿司匹林增强格列美脲降糖作用，增加低血糖风险。', medications: ['格列美脲片', '阿司匹林肠溶片'] },
-        { type: 'risk', title: '两种降糖药联用', level: 'high', detail: '格列美脲与二甲双胍联用增加低血糖风险，需监测血糖。', medications: ['格列美脲片', '二甲双胍缓释片'] },
-        { type: 'risk', title: '氯氮平 + 降压药', level: 'mid', detail: '氯氮平可能加重体位性低血压，起床宜缓。', medications: ['氯氮平片', '硝苯地平缓释片'] },
-        { type: 'action', title: '查看完整风险分析', actions: [{ label: '前往风险分析', to: '/risk' }] },
-      ],
-    };
-  }
-  return {
-    content: '我已了解您的问题。基于您的健康档案，我可以帮您分析用药、健康数据与风险。您可以试试左侧的快捷问题，或直接描述您的疑问。',
-    cards: [{ type: 'tip', title: '温馨提示', detail: '本助手提供的建议仅供参考，不能替代医生诊断与处方。如出现严重不适，请及时就医。' }],
-  };
+  return lines.join('\n');
 }
 
 export function AssistantPage() {
-  const { showToast, askAssistant } = useApp();
+  const { showToast, askAssistant, user, medications, schedule, healthRecords } = useApp();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<AIMessage[]>(initialMessages);
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    { id: WELCOME_ID, role: 'assistant', content: buildWelcome(null), timestamp: new Date().toISOString(), source: 'ai' },
+  ]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<AssistantProfileSummary | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSource, setProfileSource] = useState<'ai' | 'local'>('ai');
+  const [profileOpen, setProfileOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // 本地应答引擎的输入：已经加载到前端的真实数据
+  const localCtx = useMemo(
+    () => ({ user, medications, schedule, healthRecords }),
+    [user, medications, schedule, healthRecords],
+  );
+
+  /**
+   * 进入页面就拉档案摘要，不必先提一个问题。
+   * 拉不到（后端没起 / 部署接口挂了）就用前端已有的数据本地估算，保证卡片不空着。
+   */
+  const loadProfile = useCallback(async () => {
+    try {
+      const data = await assistantApi.profile();
+      setProfile(data);
+      setProfileSource('ai');
+    } catch {
+      setProfile(localProfileSummary(localCtx));
+      setProfileSource('local');
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [localCtx]);
+
+  useEffect(() => { void loadProfile(); }, [loadProfile]);
+
+  // 档案到手后把欢迎语换成带数据的版本（用户还没开始对话时才替换）
+  useEffect(() => {
+    if (profileLoading || !profile) return;
+    setMessages((prev) => (
+      prev.length === 1 && prev[0].id === WELCOME_ID
+        ? [{ ...prev[0], content: buildWelcome(profile) }]
+        : prev
+    ));
+  }, [profileLoading, profile]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);
 
-  const send = async (text: string) => {
-    if (!text.trim()) return;
-    const userMsg: AIMessage = { id: `u_${Date.now()}`, role: 'user', content: text, timestamp: new Date().toISOString() };
-    setMessages((m) => [...m, userMsg]);
+  const send = async (raw: string) => {
+    const text = raw.trim();
+    if (!text || typing) return;
+    setMessages((m) => [...m, { id: `u_${Date.now()}`, role: 'user', content: text, timestamp: new Date().toISOString() }]);
     setInput('');
     setTyping(true);
     try {
-      // 首轮对话不传 conversationId，扣子自动创建会话并返回；后续轮次带上以维持上下文
+      // 首轮不传 conversationId，扣子自动建会话并返回；后续轮次带上以维持上下文
       const response = await askAssistant(text, conversationId ?? undefined);
       if (response.conversation_id) setConversationId(response.conversation_id);
-      setMessages((m) => [...m, { id: `a_${Date.now()}`, role: 'assistant', content: response.content, cards: response.cards, timestamp: new Date().toISOString() }]);
+      if (response.profile) { setProfile(response.profile); setProfileSource('ai'); }
+      setMessages((m) => [...m, {
+        id: `a_${Date.now()}`, role: 'assistant', content: response.content,
+        cards: response.cards, timestamp: new Date().toISOString(),
+        source: response.source ?? 'ai',
+      }]);
     } catch {
-      showToast('助手暂时无法连接，请确认后端服务已启动', 'error');
+      // 后端不可达时不能只弹一句 toast 让对话区空着，用本地引擎基于真实数据作答
+      const local = answerLocally(text, localCtx);
+      setMessages((m) => [...m, {
+        id: `a_${Date.now()}`, role: 'assistant', content: local.content,
+        cards: local.cards as AICard[] | undefined, timestamp: new Date().toISOString(),
+        source: 'local',
+      }]);
+      setProfile((cur) => cur ?? localProfileSummary(localCtx));
+      showToast('暂时连不上 AI 服务，本次由本地应答', 'info');
     } finally {
       setTyping(false);
     }
   };
 
-  const reset = () => { setMessages(initialMessages); setConversationId(null); showToast('已清空对话，开启新会话'); };
+  const reset = () => {
+    setMessages([{ id: WELCOME_ID, role: 'assistant', content: buildWelcome(profile), timestamp: new Date().toISOString(), source: 'ai' }]);
+    setConversationId(null);
+    showToast('已清空对话，开启新会话');
+  };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-5">
+    <div className="max-w-6xl mx-auto space-y-4 lg:h-[calc(100vh-150px)] lg:flex lg:flex-col">
+      <ProfileReadCard
+        profile={profile}
+        loading={profileLoading}
+        source={profileSource}
+        open={profileOpen}
+        onToggle={() => setProfileOpen((v) => !v)}
+        onReload={() => { setProfileLoading(true); void loadProfile(); }}
+        onGoProfile={() => navigate('/profile')}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 lg:flex-1 lg:min-h-0">
         {/* Chat area */}
-        <Card className="flex flex-col h-[calc(100vh-200px)] min-h-[500px]">
+        <Card className="flex flex-col h-[70vh] min-h-[440px] overflow-hidden lg:h-auto lg:min-h-0">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-sage-100">
             <div className="flex items-center gap-3">
@@ -137,7 +162,12 @@ export function AssistantPage() {
               <div>
                 <h2 className="font-semibold text-sage-800">AI 智能用药助手</h2>
                 <p className="text-xs text-sage-500 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sage-500" /> AI 已读取您的健康档案
+                  <span className={cn('w-1.5 h-1.5 rounded-full', profileSource === 'ai' ? 'bg-sage-500' : 'bg-amber-500')} />
+                  {profileLoading
+                    ? '正在读取您的健康档案…'
+                    : profileSource === 'ai'
+                      ? `已读到您的档案与 ${profile?.active_medication_count ?? 0} 种在服药品，可以随便问`
+                      : 'AI 服务未连通，当前按本地数据回答'}
                 </p>
               </div>
             </div>
@@ -151,10 +181,15 @@ export function AssistantPage() {
                 <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', m.role === 'user' ? 'bg-sky-100 text-sky-600' : 'bg-sage-100 text-sage-600')}>
                   {m.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                 </div>
-                <div className={cn('max-w-[80%]', m.role === 'user' && 'text-right')}>
-                  <div className={cn('inline-block px-4 py-2.5 rounded-2xl text-sm', m.role === 'user' ? 'bg-sky-50 text-sky-800 rounded-tr-sm' : 'bg-cream-50 text-sage-700 rounded-tl-sm border border-sage-100')}>
-                    {m.content}
+                <div className={cn('max-w-[82%] min-w-0', m.role === 'user' && 'text-right')}>
+                  <div className={cn('inline-block px-4 py-2.5 rounded-2xl text-sm text-left', m.role === 'user' ? 'bg-sky-50 text-sky-800 rounded-tr-sm' : 'bg-cream-50 text-sage-700 rounded-tl-sm border border-sage-100')}>
+                    {m.role === 'user' ? m.content : <RichText text={m.content} />}
                   </div>
+                  {m.role === 'assistant' && m.source === 'local' && (
+                    <p className="mt-1.5 text-xs text-amber-600 flex items-center gap-1">
+                      <WifiOff size={12} /> 本地应答（未连接 AI 服务），内容仅供参考
+                    </p>
+                  )}
                   {/* Structured cards */}
                   {m.cards && m.cards.length > 0 && (
                     <div className="mt-2 space-y-2 text-left">
@@ -173,6 +208,7 @@ export function AssistantPage() {
                     <span className="w-2 h-2 rounded-full bg-sage-400 animate-pulse-soft" style={{ animationDelay: '0.2s' }} />
                     <span className="w-2 h-2 rounded-full bg-sage-400 animate-pulse-soft" style={{ animationDelay: '0.4s' }} />
                   </div>
+                  <p className="mt-2 text-xs text-sage-500">正在结合您的档案与用药记录分析，通常需要十几秒，请稍等…</p>
                 </div>
               </div>
             )}
@@ -184,31 +220,41 @@ export function AssistantPage() {
             <div className="flex gap-2">
               <input
                 className="input flex-1"
-                placeholder="输入您的用药问题…"
+                placeholder="随便问，例如「阿司匹林有什么副作用」"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && send(input)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !typing) void send(input); }}
+                disabled={typing}
               />
-              <Button icon={<Send size={16} />} onClick={() => send(input)}>发送</Button>
+              <Button icon={<Send size={16} />} onClick={() => void send(input)} disabled={typing || !input.trim()}>发送</Button>
             </div>
           </div>
         </Card>
 
         {/* Quick questions sidebar */}
-        <div className="space-y-4">
+        <div className="space-y-4 lg:overflow-y-auto lg:min-h-0 lg:pr-1">
           <Card className="p-4">
-            <p className="text-sm font-semibold text-sage-800 mb-3 flex items-center gap-1.5">
-              <Sparkles size={16} className="text-sage-600" /> 快捷问题
+            <p className="text-sm font-semibold text-sage-800 mb-1 flex items-center gap-1.5">
+              <Sparkles size={16} className="text-sage-600" /> 不知道问什么？先试试这些
             </p>
-            <div className="space-y-2">
-              {aiQuickQuestions.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => send(q)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl bg-cream-50/60 hover:bg-sage-50 border border-sage-100 text-sm text-sage-700 transition"
-                >
-                  {q}
-                </button>
+            <p className="text-xs text-sage-500 mb-3">下面只是常用的例子，其他问题也可以直接问。</p>
+            <div className="space-y-3">
+              {aiQuickQuestionGroups.map((group) => (
+                <div key={group.label}>
+                  <p className="text-xs font-medium text-sage-500 mb-1.5">{group.label}</p>
+                  <div className="space-y-1.5">
+                    {group.questions.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => void send(q)}
+                        disabled={typing}
+                        className="w-full text-left px-3 py-2 rounded-xl bg-cream-50/60 hover:bg-sage-50 border border-sage-100 text-sm text-sage-700 transition disabled:opacity-50"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </Card>
@@ -216,12 +262,134 @@ export function AssistantPage() {
           <Card className="p-4 bg-sage-50/40 border-sage-100">
             <p className="text-xs text-sage-500 flex gap-1.5">
               <Stethoscope size={14} className="shrink-0 mt-0.5" />
-              本助手已读取您的健康档案与药品信息，可提供个性化建议。但所有内容仅供参考，不能替代医生诊断。
+              本助手会结合您的健康档案与药品信息作答。但所有内容仅供参考，不能替代医生诊断；出现严重不适请及时就医。
             </p>
           </Card>
         </div>
       </div>
     </div>
+  );
+}
+
+/** 档案字段小卡片：缺项 / 空值时用琥珀色提示，避免用户误以为「已读到」就是「已录入」 */
+function FactChip({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div className={cn('rounded-xl border px-2.5 py-1.5 min-w-[100px]', warn ? 'bg-amber-50/70 border-amber-200' : 'bg-white border-sage-100')}>
+      <p className="text-[11px] text-sage-500 leading-none mb-1">{label}</p>
+      <p className={cn('text-xs font-medium leading-tight break-all', warn ? 'text-amber-700' : 'text-sage-800')}>{value}</p>
+    </div>
+  );
+}
+
+/**
+ * 「AI 已读到的您的档案」卡片。
+ * 老人的疑问是「它到底读到了我什么、我的档案是不是空的」，所以这里把 AI 侧真实拿到的字段摊开给用户看，
+ * 缺项也明确列出来并给出补录入口。
+ */
+function ProfileReadCard({
+  profile, loading, source, open, onToggle, onReload, onGoProfile,
+}: {
+  profile: AssistantProfileSummary | null;
+  loading: boolean;
+  source: 'ai' | 'local';
+  open: boolean;
+  onToggle: () => void;
+  onReload: () => void;
+  onGoProfile: () => void;
+}) {
+  const missing = profile?.missing_fields ?? [];
+  const pct = profile?.completeness ?? 0;
+  const isMissing = (label: string) => missing.includes(label);
+
+  const facts: { label: string; value: string; warn: boolean }[] = profile ? [
+    { label: '姓名', value: profile.name || '未填写', warn: !profile.name },
+    { label: '年龄', value: profile.age ? `${profile.age} 岁` : '未填写', warn: isMissing('年龄') },
+    { label: '慢性病史', value: profile.chronic_conditions.join('、') || (isMissing('慢性病史') ? '未填写' : '未记录'), warn: isMissing('慢性病史') || profile.chronic_conditions.length === 0 },
+    { label: '过敏史', value: profile.allergies.join('、') || '未记录', warn: profile.allergies.length === 0 },
+    { label: '在服药品', value: profile.active_medication_count ? `${profile.active_medication_count} 种` : '未录入', warn: profile.active_medication_count === 0 },
+    { label: '今日用药', value: profile.today_total ? `已服 ${profile.today_taken} / ${profile.today_total} 次` : '今日无计划', warn: false },
+    { label: '最近血压', value: profile.latest_bp ? `${profile.latest_bp} mmHg` : '暂无记录', warn: false },
+    { label: '最近血糖', value: profile.latest_blood_sugar ? `${profile.latest_blood_sugar} mmol/L` : '暂无记录', warn: false },
+    { label: '最近心率', value: profile.latest_heart_rate ? `${profile.latest_heart_rate} 次/分` : '暂无记录', warn: false },
+    { label: '健康记录', value: profile.record_count ? `${profile.record_count} 条` : '暂无记录', warn: false },
+  ] : [];
+
+  // 空值不是「未录入」的字段（如指标类），用中性文案展示
+  return (
+    <Card className="p-4 border-sage-100 bg-sage-50/30 shrink-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <span className="w-8 h-8 rounded-xl bg-white border border-sage-100 flex items-center justify-center text-sage-600 shrink-0">
+            <ClipboardList size={17} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-sage-800 flex items-center gap-2 flex-wrap">
+              AI 已读到的您的档案
+              {loading ? (
+                <span className="text-xs font-normal text-sage-500 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> 读取中…</span>
+              ) : missing.length ? (
+                <Badge level="mid"><AlertTriangle size={11} className="inline -mt-0.5 mr-0.5" />待补全 {missing.length} 项</Badge>
+              ) : (
+                <Badge level="low"><CheckCircle2 size={11} className="inline -mt-0.5 mr-0.5" />档案完整</Badge>
+              )}
+              {source === 'local' && !loading && <span className="text-xs font-normal text-amber-600">（按本地数据估算）</span>}
+            </p>
+            <p className="text-xs text-sage-500 mt-1">
+              下面这些就是助手回答时会参考的您的信息，不是凭空编的。
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {source === 'local' && !loading && (
+            <button onClick={onReload} className="p-1.5 rounded-lg text-sage-500 hover:bg-white hover:text-sage-700 transition" title="重新连接 AI 服务">
+              <RefreshCw size={15} />
+            </button>
+          )}
+          <button onClick={onToggle} className="p-1.5 rounded-lg text-sage-500 hover:bg-white hover:text-sage-700 transition" title={open ? '收起' : '展开'}>
+            {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mt-3">
+          {loading && !profile ? (
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-[46px] w-[110px] rounded-xl bg-white/70 border border-sage-100 animate-pulse-soft" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {facts.map((f) => <FactChip key={f.label} label={f.label} value={f.value} warn={f.warn} />)}
+              </div>
+
+              {/* 完整度进度条 */}
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex-1 h-1.5 rounded-full bg-white overflow-hidden border border-sage-100">
+                  <div
+                    className={cn('h-full rounded-full transition-all', pct >= 100 ? 'bg-sage-500' : 'bg-amber-400')}
+                    style={{ width: `${Math.max(4, Math.min(100, pct))}%` }}
+                  />
+                </div>
+                <span className="text-xs text-sage-600 shrink-0">档案完整度 {pct}%</span>
+              </div>
+
+              {missing.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50/70 border border-amber-200 px-3 py-2">
+                  <p className="text-xs text-amber-800 flex-1 min-w-[200px]">
+                    <span className="font-medium">还缺：{missing.join('、')}</span>
+                    <span className="ml-2">补全后，助手判断用药风险和用法时会准确很多。</span>
+                  </p>
+                  <Button size="sm" variant="secondary" icon={<ArrowRight size={13} />} onClick={onGoProfile}>去完善健康档案</Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
