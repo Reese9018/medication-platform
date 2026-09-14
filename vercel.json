@@ -19,20 +19,10 @@
       }
     },
     {
-      "source": "/assets/(.*)",
-      "destination": {
-        "service": "frontend"
-      }
-    },
-    {
-      "source": "/favicon.svg",
-      "destination": {
-        "service": "frontend"
-      }
-    },
-    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": {
+        "service": "frontend"
+      }
     }
   ]
 }
