@@ -16,7 +16,10 @@ export interface UserProfile {
   bloodType: string;
   emergencyContact?: string;
   phone?: string;
+  /** 账号注册日期（YYYY-MM-DD） */
   createdAt: string;
+  /** 健康档案建档/更新日期（YYYY-MM-DD）：每次修改档案保存后由后端刷新，为空表示从未编辑过 */
+  profileUpdatedAt?: string;
 }
 
 export type MedicationStatus = 'active' | 'paused' | 'finished';

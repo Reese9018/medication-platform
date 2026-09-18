@@ -74,6 +74,8 @@ def update_medication(medication_id: int, payload: MedicationCreate, user: User 
 def delete_medication(medication_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     observed = get_observed_user(user, db)
     medication = owned_medication(medication_id, observed, db)
+    # 先删除该药品相关的所有排程记录，避免外键约束冲突
+    db.query(ScheduleDose).filter(ScheduleDose.medication_id == medication_id).delete()
     db.delete(medication); db.commit()
     return {"message": "药品已删除"}
 

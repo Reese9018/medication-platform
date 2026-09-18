@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Accessibility, ChevronDown, LogOut, User, CheckCheck, Menu } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { cn, getRoleAvatarUrl } from '@/lib/utils';
+import { InstallAppButton } from '@/components/InstallAppButton';
 
 export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout, notifications, markNotificationRead, markAllRead, settings, updateSettings, showToast } = useApp();
@@ -59,6 +60,9 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
         {/* Right: actions */}
         <div className="flex items-center gap-2">
+          {/* Install App */}
+          <InstallAppButton />
+
           {/* Accessibility toggle */}
           <button
             onClick={toggleElderMode}

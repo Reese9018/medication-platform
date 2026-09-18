@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   FolderHeart, User, Ruler, Weight, Heart, AlertTriangle, Pill,
-  Edit2, Sparkles, Save, Activity, ShieldPlus, Calendar,
+  Edit2, Sparkles, Save, Activity, ShieldPlus, Calendar, Info,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import type { UserProfile } from '@/types';
-import { getRoleAvatarUrl } from '@/lib/utils';
+import { getRoleAvatarUrl, formatDate } from '@/lib/utils';
 
 export function ProfilePage() {
   const { user, medications, updateUser, showToast } = useApp();
@@ -18,6 +18,10 @@ export function ProfilePage() {
 
   if (!user) return null;
   const activeMeds = medications.filter((m) => m.status === 'active');
+  // 建档日期 = 健康档案自身的建档/更新日期（修改档案保存后由后端刷新为当天），
+  // 档案从未编辑过的老账号回退到注册日期；两者都取不到才兜底「未知」
+  const archiveDateText = formatDate(user.profileUpdatedAt) || formatDate(user.createdAt) || '未知';
+  const archiveEdited = Boolean(user.profileUpdatedAt);
 
   const openEdit = () => { setForm({ ...user }); setEditOpen(true); };
   const handleSave = async () => {
@@ -66,8 +70,11 @@ export function ProfilePage() {
               <span className="text-sm text-sage-600">{user.age}岁 · {user.gender}</span>
               <Badge level="info" className="text-xs">{user.role === 'family' ? '家属端' : '老人端'}</Badge>
             </div>
-            <p className="text-sm text-sage-400 mt-2 flex items-center justify-center sm:justify-start gap-1">
-              <Calendar size={14} /> 建档日期：{user.createdAt}
+            <p className="text-sm text-sage-400 mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-1">
+              <Calendar size={14} /> 建档日期：{archiveDateText}
+              <span className="text-xs text-sage-300">
+                {archiveEdited ? '（修改档案后自动更新）' : '（档案尚未修改过，显示注册日期）'}
+              </span>
             </p>
           </div>
         </div>
@@ -78,7 +85,7 @@ export function ProfilePage() {
         <MetricCard icon={<Ruler size={20} />} label="身高" value={`${user.height} cm`} color="sage" />
         <MetricCard icon={<Weight size={20} />} label="体重" value={`${user.weight} kg`} color="sky" />
         <MetricCard icon={<Activity size={20} />} label="血型" value={user.bloodType} color="coral" />
-        <MetricCard icon={<User size={20} />} label="建档日期" value={user.createdAt} color="amber" />
+        <MetricCard icon={<User size={20} />} label="建档日期" value={archiveDateText} color="amber" />
       </div>
 
       {/* ===== 慢性疾病 + 过敏史 ===== */}
@@ -161,7 +168,12 @@ export function ProfilePage() {
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="编辑健康档案" size="lg"
         footer={<><Button variant="secondary" onClick={() => setEditOpen(false)}>取消</Button><Button icon={<Save size={16} />} onClick={handleSave}>保存</Button></>}>
         {form && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <p className="text-xs text-sage-500 flex items-start gap-1.5 bg-sage-50/70 border border-sage-100 rounded-xl px-3 py-2">
+              <Info size={14} className="mt-0.5 shrink-0" />
+              保存后「建档日期」会同步更新为今天；若本次没有实际改动，建档日期保持不变。
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className="label">姓名</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div><label className="label">年龄</label><input type="number" className="input" value={form.age} onChange={(e) => setForm({ ...form, age: +e.target.value })} /></div>
             <div><label className="label">性别</label><select className="input" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as '男' | '女' })}><option>男</option><option>女</option></select></div>
@@ -171,6 +183,7 @@ export function ProfilePage() {
             <div className="sm:col-span-2"><label className="label">慢性疾病（逗号分隔）</label><input className="input" value={form.chronicConditions.join('，')} onChange={(e) => setForm({ ...form, chronicConditions: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} /></div>
             <div className="sm:col-span-2"><label className="label">过敏史（逗号分隔）</label><input className="input" value={form.allergies.join('，')} onChange={(e) => setForm({ ...form, allergies: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} /></div>
             <div className="sm:col-span-2"><label className="label">紧急联系人</label><input className="input" value={form.emergencyContact || ''} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} /></div>
+            </div>
           </div>
         )}
       </Modal>
@@ -186,12 +199,14 @@ function MetricCard({ icon, label, value, color }: { icon: React.ReactNode; labe
     coral: 'bg-coral-50 text-coral-600',
     amber: 'bg-amber-50 text-amber-600',
   };
+  // 建档日期等较长文本时自动缩小字号，避免撑破卡片
+  const isLongText = value.length > 10;
   return (
     <Card className="p-4 text-center hover:shadow-card transition">
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto ${colorMap[color]}`}>
         {icon}
       </div>
-      <p className="text-2xl font-bold text-sage-800 mt-2">{value}</p>
+      <p className={`font-bold text-sage-800 mt-2 whitespace-nowrap tabular-nums ${isLongText ? 'text-lg' : 'text-2xl'}`}>{value}</p>
       <p className="text-sm text-sage-500">{label}</p>
     </Card>
   );

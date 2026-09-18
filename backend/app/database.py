@@ -31,12 +31,21 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def run_legacy_migrations() -> None:
-    """老库轻量迁移：把旧 family_links(bound 布尔) 升级为三态 (status + requester_id)。
+    """老库轻量迁移：补齐后加的业务列。
 
-    仅在列缺失时执行 ALTER；新库无此表时 create_all 已建好，这里 no-op。
+    仅在列缺失时执行 ALTER；新库由 create_all 建好，这里 no-op。
     """
     inspector = inspect(engine)
-    if "family_links" not in inspector.get_table_names():
+    tables = set(inspector.get_table_names())
+
+    # users.profile_updated_at：健康档案建档/更新日期（create_all 不会给老表补列）
+    if "users" in tables:
+        user_cols = {c["name"] for c in inspector.get_columns("users")}
+        if "profile_updated_at" not in user_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN profile_updated_at TIMESTAMP"))
+
+    if "family_links" not in tables:
         return
     cols = {c["name"] for c in inspector.get_columns("family_links")}
 

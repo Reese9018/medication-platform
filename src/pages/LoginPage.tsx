@@ -14,6 +14,7 @@ import {
 import { useApp } from '@/context/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Captcha, type CaptchaHandle } from '@/components/ui/Captcha';
+import { InstallAppButton } from '@/components/InstallAppButton';
 
 export function LoginPage() {
   const { login, showToast } = useApp();
@@ -110,6 +111,11 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-cream-50">
+      {/* Floating install button */}
+      <div className="fixed top-4 right-4 z-50">
+        <InstallAppButton variant="default" />
+      </div>
+
       {/* Left brand panel */}
       <div className="hidden lg:flex lg:w-[46%] relative overflow-hidden bg-gradient-to-br from-sage-900 via-sage-700 to-sage-600 flex-col gap-7 p-12 text-white">
         {/* Decorations */}
@@ -119,9 +125,7 @@ export function LoginPage() {
 
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sage-400 to-sage-700 flex items-center justify-center shadow-pop ring-1 ring-white/15">
-            <ShieldPlus className="text-white" size={26} />
-          </div>
+          <img src="/logo.png" alt="智药护航" className="w-12 h-12 rounded-xl shadow-pop ring-1 ring-white/15" />
           <div>
             <h1 className="text-xl font-bold text-white">智药护航</h1>
             <p className="text-xs text-sage-200">AI 智能用药管理平台</p>
@@ -134,25 +138,39 @@ export function LoginPage() {
             AI 守护用药安全<br />让健康管理更简单
           </h2>
           <p className="mt-4 text-sage-200 leading-relaxed">
-            智能用药提醒 · 多药风险分析 · 家属远程监护，让每一片药都安心。
+            专为中老年朋友设计的智能用药管理系统，操作简单易懂。
           </p>
+          <div className="mt-6 space-y-3 text-sm text-sage-100">
+            <p className="flex items-start gap-2">
+              <ShieldCheck size={18} className="shrink-0 mt-0.5" />
+              <span>大字体、大按钮，长辈看着不累眼</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <ShieldCheck size={18} className="shrink-0 mt-0.5" />
+              <span>按时服药提醒，再也不怕忘吃药</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <ShieldCheck size={18} className="shrink-0 mt-0.5" />
+              <span>子女远程查看，全家都安心</span>
+            </p>
+          </div>
         </div>
 
-        {/* Hero illustration：撑满剩余高度（设计稿 524×545.22） */}
-        <img
-          src="/login-hero.jpg"
-          alt="长辈在家人陪伴下使用智能药盒"
-          className="relative w-full flex-1 min-h-0 object-cover rounded-2xl border border-white/15 shadow-pop"
-        />
+        {/* Hero illustration：撑满剩余高度，裁剪掉右下角 AI 水印 */}
+        <div className="relative w-full flex-1 min-h-0 overflow-hidden rounded-2xl border border-white/15 shadow-pop">
+          <img
+            src="/login-hero.jpg"
+            alt="长辈在家人陪伴下使用智能药盒"
+            className="w-full h-[calc(100%+40px)] object-cover -mb-10"
+          />
+        </div>
       </div>
 
       {/* Right login form */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="w-11 h-11 rounded-2xl bg-sage-600 flex items-center justify-center">
-              <ShieldPlus className="text-white" size={24} />
-            </div>
+            <img src="/logo.png" alt="智药护航" className="w-11 h-11 rounded-xl" />
             <div>
               <h1 className="font-display text-lg font-bold text-sage-800">智药护航</h1>
               <p className="text-xs text-sage-500">AI 智能用药管理平台</p>
@@ -169,7 +187,7 @@ export function LoginPage() {
                 onClick={() => selectRole('elder')}
                 className={`py-2.5 rounded-lg text-sm font-medium transition ${role === 'elder' ? 'bg-white text-sage-800 shadow-soft' : 'text-sage-400'}`}
               >
-                老人端
+                患者端
               </button>
               <button
                 onClick={() => selectRole('family')}

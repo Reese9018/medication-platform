@@ -13,7 +13,7 @@ from ..schemas import OCRResult
 
 # 智谱 OpenAPI 对话补全接口（兼容 OpenAI 格式）
 ZHIPU_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-ZHIPU_MODEL = "glm-5.3-flash"  # 免费视觉模型
+ZHIPU_MODEL = "glm-4v-flash"  # 免费视觉模型
 ZHIPU_TIMEOUT_SECONDS = 60
 
 # 提示词：要求 AI 以纯 JSON 返回结构化药品信息
@@ -23,7 +23,7 @@ OCR_PROMPT = """请识别这张药品包装/说明书图片，提取以下信息
   "spec": "规格，如 20mg×14片",
   "dosage": "每次服用剂量，如 1片",
   "purpose": "用途/适应症",
-  "frequencyPerDay": 每日服用次数(数字),
+  "frequency_per_day": 每日服用次数(数字),
   "times": ["服用时间点，如 08:00"],
   "contraindications": ["禁忌症"],
   "precautions": "注意事项"
@@ -112,7 +112,6 @@ def recognize_medicine(image_base64: str) -> OCRResult:
                 ],
             }
         ],
-        "response_format": {"type": "json_object"},
     }
 
     resp = httpx.post(

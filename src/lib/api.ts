@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { formatDate, formatTime } from '@/lib/utils';
 import type {
   AppNotification,
   FamilyMember,
@@ -45,6 +46,35 @@ assistantApiClient.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+// ============================================================
+// 接口错误 → 用户可读文案
+// ============================================================
+
+/** 请求根本没到后端（后端没启动 / 端口不对 / 代理失效），axios 无 response */
+export function isOfflineError(err: unknown): boolean {
+  return axios.isAxiosError(err) && !err.response;
+}
+
+/** 服务端已经没有这条数据了（例如重复删除已删掉的药品） */
+export function isNotFoundError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 404;
+}
+
+/**
+ * 把 axios 错误转成可直接展示给老人的中文提示：
+ * - 后端连不上（axios 没有 response）→ 直接说清怎么恢复，而不是弹 "Network Error"
+ * - 后端/代理返回了中文 detail → 用它（如 404「药品不存在」、代理的「后端服务不可达…」）
+ * - 其余（如 500 "Internal Server Error"）→ 用兜底文案，不把英文抛给用户
+ */
+export function describeApiError(err: unknown, fallback: string): string {
+  if (isOfflineError(err)) return '后端服务未连接，请确认后端服务已启动';
+  if (axios.isAxiosError(err)) {
+    const detail = (err.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string' && /[\u4e00-\u9fa5]/.test(detail)) return detail.trim();
+  }
+  return fallback;
+}
 
 export interface AssistantProfileSummary {
   name: string;
@@ -140,7 +170,11 @@ function toUser(data: Record<string, unknown>): UserProfile {
     allergies: Array.isArray(data.allergies) ? data.allergies.map(String) : [], bloodType: String(data.blood_type ?? ''),
     emergencyContact: data.emergency_contact ? String(data.emergency_contact) : undefined,
     phone: data.phone ? String(data.phone) : undefined,
-    createdAt: String(data.created_at ?? ''),
+    // created_at 是 ISO 长串（2026-09-13T09:23:16.729089），
+    // 统一在此归一化为日期，避免各页面直接渲染时撑破卡片
+    createdAt: formatDate(String(data.created_at ?? '')),
+    // 健康档案建档/更新日期：修改档案保存后后端会刷新；老数据为空时回退到 createdAt
+    profileUpdatedAt: formatDate(String(data.profile_updated_at ?? '')) || undefined,
   };
 }
 
@@ -222,7 +256,7 @@ export const medicationApi = {
   async update(id: string, medication: Medication): Promise<Medication> { const { data } = await api.patch(`/medications/${id}`, medication); return toMedication(data); },
   async remove(id: string): Promise<void> { await api.delete(`/medications/${id}`); },
   async recognize(imageBase64: string): Promise<OCRResult> {
-    const { data } = await api.post('/medications/ocr', { image_base64: imageBase64 });
+    const { data } = await api.post('/medications/ocr', { image_base64: imageBase64 }, { timeout: 120000 });
     return data;
   },
 };
@@ -322,11 +356,11 @@ export const familyApi = {
 };
 
 export const notificationApi = {
-  async list(): Promise<AppNotification[]> { const { data } = await api.get('/notifications'); return data.map((item: Record<string, unknown>) => ({ id: String(item.id), title: String(item.title), detail: String(item.detail), level: item.level === 'danger' || item.level === 'warn' ? item.level : 'info', time: String(item.created_at ?? ''), read: Boolean(item.read) })); },
+  async list(): Promise<AppNotification[]> { const { data } = await api.get('/notifications'); return data.map((item: Record<string, unknown>) => ({ id: String(item.id), title: String(item.title), detail: String(item.detail), level: item.level === 'danger' || item.level === 'warn' ? item.level : 'info', time: formatTime(String(item.created_at ?? '')), read: Boolean(item.read) })); },
   async read(id: string): Promise<void> { await api.post(`/notifications/${id}/read`); },
   async readAll(): Promise<void> { await api.post('/notifications/read-all'); },
 };
 
-export const reportApi = { async get(period: 'week' | 'month'): Promise<ReportData> { const { data } = await api.get(`/reports/${period}`); return { period: data.period, startDate: data.start_date, endDate: data.end_date, adherenceRate: data.adherence_rate, missedCount: data.missed_count, avgSystolic: data.avg_systolic, avgDiastolic: data.avg_diastolic, avgBloodSugar: data.avg_blood_sugar, avgHeartRate: data.avg_heart_rate, riskCount: data.risk_count, aiSummary: data.ai_summary, suggestions: data.suggestions }; } };
+export const reportApi = { async get(period: 'week' | 'month'): Promise<ReportData> { const { data } = await api.get(`/reports/${period}`); return { period: data.period, startDate: formatDate(String(data.start_date ?? '')), endDate: formatDate(String(data.end_date ?? '')), adherenceRate: data.adherence_rate, missedCount: data.missed_count, avgSystolic: data.avg_systolic, avgDiastolic: data.avg_diastolic, avgBloodSugar: data.avg_blood_sugar, avgHeartRate: data.avg_heart_rate, riskCount: data.risk_count, aiSummary: data.ai_summary, suggestions: data.suggestions }; } };
 
 export default api;

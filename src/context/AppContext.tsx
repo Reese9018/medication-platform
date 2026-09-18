@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { UserProfile, Medication, ScheduleDose, HealthRecord, FamilyMember, FamilyRequest, AppNotification, DoseStatus } from '@/types';
 import { elderProfile, familyProfile, medications as initialMeds, todaySchedule, healthRecords as initialHealth, familyMembers as initialFamily, notifications as initialNotifs } from '@/data/mockData';
-import { assistantApi, authApi, familyApi, healthApi, medicationApi, notificationApi, scheduleApi, userApi } from '@/lib/api';
+import { assistantApi, authApi, familyApi, healthApi, isNotFoundError, medicationApi, notificationApi, scheduleApi, userApi } from '@/lib/api';
 
 interface Settings { elderMode: boolean; highContrast: boolean; reducedDeco: boolean; voiceRead: boolean }
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'info' }
@@ -14,8 +14,8 @@ interface AppContextValue {
   updateUser: (patch: Partial<UserProfile>) => Promise<void>;
   medications: Medication[];
   setMedications: React.Dispatch<React.SetStateAction<Medication[]>>;
-  addMedication: (m: Medication) => Promise<void>;
-  updateMedication: (id: string, patch: Partial<Medication>) => Promise<void>;
+  addMedication: (m: Medication) => Promise<boolean>;
+  updateMedication: (id: string, patch: Partial<Medication>) => Promise<boolean>;
   removeMedication: (id: string) => Promise<void>;
   schedule: ScheduleDose[];
   setSchedule: React.Dispatch<React.SetStateAction<ScheduleDose[]>>;
@@ -134,15 +134,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [showToast]);
 
-  const addMedication = useCallback(async (medication: Medication) => {
-    try { const created = await medicationApi.create(medication); setMedications((items) => [...items, created]); showToast('药品已添加'); } catch { showToast('药品添加失败，请确认后端服务已启动', 'error'); }
+  // 新增/编辑与删除保持同一套反馈约定：接口真正成功才更新本地状态，
+  // 并用返回值告诉调用方是否成功（成功提示统一由页面发出，避免同一次操作弹两条提示）
+  const addMedication = useCallback(async (medication: Medication): Promise<boolean> => {
+    try { const created = await medicationApi.create(medication); setMedications((items) => [...items, created]); return true; } catch { showToast('药品添加失败，请确认后端服务已启动', 'error'); return false; }
   }, [showToast]);
-  const updateMedication = useCallback(async (id: string, patch: Partial<Medication>) => {
-    try { const current = medications.find((item) => item.id === id); if (!current) return; const updated = await medicationApi.update(id, { ...current, ...patch }); setMedications((items) => items.map((item) => item.id === id ? updated : item)); } catch { showToast('药品更新失败', 'error'); }
+  const updateMedication = useCallback(async (id: string, patch: Partial<Medication>): Promise<boolean> => {
+    try { const current = medications.find((item) => item.id === id); if (!current) return false; const updated = await medicationApi.update(id, { ...current, ...patch }); setMedications((items) => items.map((item) => item.id === id ? updated : item)); return true; } catch { showToast('药品更新失败，请确认后端服务已启动', 'error'); return false; }
   }, [medications, showToast]);
   const removeMedication = useCallback(async (id: string) => {
-    try { await medicationApi.remove(id); setMedications((items) => items.filter((item) => item.id !== id)); setSchedule((items) => items.filter((item) => item.medicationId !== id)); } catch { showToast('药品删除失败', 'error'); }
-  }, [showToast]);
+    // 删除接口失败（如后端 500 / 连不上）时不能改本地状态，否则会出现
+    // 「卡片看着删掉了、刷新又回来」的假删除；这里把错误抛给调用方，
+    // 由页面统一决定怎么提示，避免「已删除」和「删除失败」两条提示互相打架。
+    try {
+      await medicationApi.remove(id);
+    } catch (err) {
+      // 404 说明服务端已经不存在了（例如重复点击删除），视作删除成功
+      if (!isNotFoundError(err)) throw err;
+    }
+    setMedications((items) => items.filter((item) => item.id !== id));
+    setSchedule((items) => items.filter((item) => item.medicationId !== id));
+  }, []);
   const markDose = useCallback(async (id: string, status: DoseStatus) => {
     // 乐观更新：点击后立即更新本地状态，保证用户体验
     setSchedule((items) => items.map((item) => item.id === id ? { ...item, status } : item));

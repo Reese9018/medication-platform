@@ -41,9 +41,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-5 pt-6 pb-5">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-sage-600 flex items-center justify-center shadow-soft">
-            <ShieldPlus className="text-white" size={24} />
-          </div>
+          <img src="/logo.png" alt="智药护航" className="w-11 h-11 rounded-xl shadow-soft" />
           <div>
             <h1 className="font-display text-lg font-bold text-sage-800 leading-tight">智药护航</h1>
             <p className="text-[11px] text-sage-500 leading-tight">AI 智能用药管理平台</p>

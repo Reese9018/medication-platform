@@ -3,6 +3,46 @@ export function cn(...classes: (string | false | null | undefined)[]) {
 }
 
 // ============================================================
+// 日期 / 时间格式化
+// ============================================================
+
+const pad2 = (v: string | number) => String(v).padStart(2, '0');
+
+/**
+ * 把后端返回的时间统一格式化成「YYYY-MM-DD」。
+ *
+ * 后端 created_at / start_date 等字段是 ISO 串（如 2026-09-13T09:23:16.729089），
+ * 直接渲染会撑破卡片（如健康档案里的「建档日期」），因此展示前必须过一层格式化。
+ * 用正则优先截取年月日，避免 new Date('2026-09-13') 按 UTC 解析在部分时区倒退一天。
+ */
+export function formatDate(value?: string | null): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const matched = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(raw);
+  if (matched) return `${matched[1]}-${pad2(matched[2])}-${pad2(matched[3])}`;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
+}
+
+/** 兼容 MM-DD 的短日期，用于列表等空间有限的位置 */
+export function formatDateShort(value?: string | null): string {
+  const full = formatDate(value);
+  const matched = /^\d{4}-(\d{2})-(\d{2})$/.exec(full);
+  return matched ? `${matched[1]}-${matched[2]}` : full;
+}
+
+/** 「YYYY-MM-DD HH:mm」，用于需要精确到分钟的场景（如用药记录时间） */
+export function formatTime(value?: string | null): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const matched = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[T\s](\d{1,2}):(\d{2})/.exec(raw);
+  return matched
+    ? `${matched[1]}-${pad2(matched[2])}-${pad2(matched[3])} ${pad2(matched[4])}:${matched[5]}`
+    : formatDate(raw);
+}
+
+// ============================================================
 // 角色头像：按用户角色 + 性别返回对应的卡通形象路径
 // ============================================================
 

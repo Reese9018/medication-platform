@@ -32,6 +32,9 @@ class User(Base):
     blood_type: Mapped[str] = mapped_column(String(16), default="")
     emergency_contact: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # 健康档案的建档日期：档案建立或每次修改保存后刷新（账号注册时间另由 created_at 记录）。
+    # 为空表示档案从未被编辑过，前端展示时回退到 created_at。
+    profile_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     medications: Mapped[list["Medication"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     health_records: Mapped[list["HealthRecord"]] = relationship(back_populates="user", cascade="all, delete-orphan")

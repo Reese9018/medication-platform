@@ -12,7 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { SectionTitle, EmptyState } from '@/components/ui/Common';
 import { PillIcon } from '@/components/ui/Decorations';
 import type { Medication } from '@/types';
-import { medicationApi, type OCRResult } from '@/lib/api';
+import { describeApiError, medicationApi, type OCRResult } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { FamilyMedsView } from './family/FamilyMedsView';
 
@@ -40,19 +40,30 @@ export function MedicationsPage() {
     });
   }, [medications, search, category]);
 
-  const handleDelete = (id: string, name: string) => {
-    removeMedication(id);
-    showToast(`已删除「${name}」`, 'info');
+  // 正在删除的药品 id：用于防止连点，并在卡片上给出「删除中」反馈
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (deletingId) return; // 已有删除在进行中，忽略重复点击
+    if (!window.confirm(`确定要删除药品「${name}」吗？\n删除后该药品的所有服药计划也会被移除。`)) return;
+    setDeletingId(id);
+    try {
+      // 必须等接口真的成功再提示「已删除」，否则会出现
+      // 成功提示和失败提示同时挂在右上角的情况
+      await removeMedication(id);
+      showToast(`已删除「${name}」`, 'info');
+    } catch (err) {
+      showToast(describeApiError(err, `「${name}」删除失败，请稍后重试`), 'error');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  const handleSave = (med: Medication) => {
-    if (editing) {
-      updateMedication(editing.id, med);
-      showToast('药品信息已更新');
-    } else {
-      addMedication(med);
-      showToast('已添加新药品');
-    }
+  const handleSave = async (med: Medication) => {
+    // 与删除一致：等接口返回成功再提示并关闭弹窗，失败时保留弹窗让用户重试
+    const ok = editing ? await updateMedication(editing.id, med) : await addMedication(med);
+    if (!ok) return;
+    showToast(editing ? '药品信息已更新' : '已添加新药品');
     setAddOpen(false);
     setEditing(null);
   };
@@ -118,12 +129,18 @@ export function MedicationsPage() {
                       <p className="text-xs text-sage-400">{m.spec}</p>
                     </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                  <div className="flex gap-1">
                     <button onClick={() => { setEditing(m); setAddOpen(true); }} className="p-1.5 rounded-lg text-sage-500 hover:bg-sage-50 hover:text-sage-700">
                       <Edit2 size={15} />
                     </button>
-                    <button onClick={() => handleDelete(m.id, m.name)} className="p-1.5 rounded-lg text-coral-500 hover:bg-coral-50">
-                      <Trash2 size={15} />
+                    <button
+                      onClick={() => handleDelete(m.id, m.name)}
+                      disabled={deletingId === m.id}
+                      title={deletingId === m.id ? '正在删除…' : '删除药品'}
+                      aria-label={`删除药品「${m.name}」`}
+                      className="p-1.5 rounded-lg text-coral-500 hover:bg-coral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={15} className={deletingId === m.id ? 'animate-pulse' : undefined} />
                     </button>
                   </div>
                 </div>
@@ -154,7 +171,7 @@ export function MedicationsPage() {
       )}
 
       {/* OCR modal */}
-      <OCRModal open={ocrOpen} onClose={() => setOcrOpen(false)} onConfirm={(med) => { addMedication(med); showToast('已通过 AI 识别添加药品'); }} />
+      <OCRModal open={ocrOpen} onClose={() => setOcrOpen(false)} onConfirm={async (med) => { if (await addMedication(med)) showToast('已通过 AI 识别添加药品'); }} />
 
       {/* Add/Edit modal */}
       <MedicationFormModal open={addOpen} editing={editing} onClose={() => { setAddOpen(false); setEditing(null); }} onSave={handleSave} />
@@ -163,20 +180,38 @@ export function MedicationsPage() {
 }
 
 // ============ OCR Modal ============
-function OCRModal({ open, onClose, onConfirm }: { open: boolean; onClose: () => void; onConfirm: (m: Medication) => void }) {
+function OCRModal({ open, onClose, onConfirm }: { open: boolean; onClose: () => void; onConfirm: (m: Medication) => void | Promise<void> }) {
   const [step, setStep] = useState<'upload' | 'scanning' | 'result' | 'error'>('upload');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<OCRResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 把 File 转成纯 base64（不含 data: 前缀）
+  // 把 File 转成纯 base64（不含 data: 前缀），并自动压缩
   const fileToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
-        resolve(dataUrl.split(',')[1] || '');
+        // 压缩图片：缩放到最大宽度 1024px，JPEG 质量 0.8
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxWidth = 1024;
+          const scale = Math.min(1, maxWidth / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(dataUrl.split(',')[1] || '');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(compressed.split(',')[1] || '');
+        };
+        img.onerror = () => resolve(dataUrl.split(',')[1] || '');
+        img.src = dataUrl;
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
@@ -221,7 +256,7 @@ function OCRModal({ open, onClose, onConfirm }: { open: boolean; onClose: () => 
     setTimeout(reset, 300);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!result) return;
     const med: Medication = {
       id: `m_${Date.now()}`,
@@ -239,7 +274,8 @@ function OCRModal({ open, onClose, onConfirm }: { open: boolean; onClose: () => 
       contraindications: result.contraindications || [],
       precautions: result.precautions || '',
     };
-    onConfirm(med);
+    // 保存失败时保留弹窗，用户可重试，不会「关了窗但药没存上」
+    await onConfirm(med);
     handleClose();
   };
 

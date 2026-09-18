@@ -27,6 +27,8 @@ class UserOut(ORMModel):
     height: float; weight: float; role: str; avatar_color: str
     chronic_conditions: list[Any]; allergies: list[Any]; blood_type: str
     emergency_contact: str | None; created_at: datetime
+    # 健康档案建档/更新日期（为空表示档案未编辑过）
+    profile_updated_at: datetime | None = None
 
 class TokenOut(BaseModel):
     access_token: str
