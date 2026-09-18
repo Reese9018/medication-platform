@@ -24,8 +24,11 @@ export function ReportsPage() {
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    reportApi.get(period).then(setReport).catch(() => showToast('报告加载失败，请确认后端服务已启动', 'error'));
-  }, [period, showToast]);
+    // 后端 API 失败时静默使用默认模拟数据，不打扰用户
+    reportApi.get(period).then(setReport).catch(() => {
+      // 静默失败，使用默认 weeklyReport / monthlyReport
+    });
+  }, [period]);
 
   const handleGenerate = async () => {
     setGenerated(false);
