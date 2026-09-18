@@ -23,10 +23,11 @@ from app.main import app  # noqa: E402  FastAPI 实例（顶层变量名必须�
 # ---- 幂等初始化：确保云端数据表 + 演示账号（elder/123456 等）就绪 ----
 # Vercel 每个冷启动实例执行一次；seed 自带 count 检查，重复执行安全。
 try:
-    from app.database import Base, engine, SessionLocal  # noqa: E402
+    from app.database import Base, engine, SessionLocal, run_legacy_migrations  # noqa: E402
     from app.services.seed import seed_demo_data  # noqa: E402
 
     Base.metadata.create_all(bind=engine)
+    run_legacy_migrations()
     with SessionLocal() as db:
         seed_demo_data(db)
 except Exception:
