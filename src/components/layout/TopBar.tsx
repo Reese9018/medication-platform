@@ -6,7 +6,7 @@ import { cn, getRoleAvatarUrl } from '@/lib/utils';
 import { InstallAppButton } from '@/components/InstallAppButton';
 
 export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
-  const { user, logout, notifications, markNotificationRead, markAllRead, settings, updateSettings, showToast } = useApp();
+  const { user, logout, notifications, markNotificationRead, markAllRead, settings, updateSettings, showToast, toasts, dismissToast } = useApp();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -28,6 +28,8 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   }, []);
 
   const handleLogout = () => {
+    // 先清除所有未消失的旧提示，避免和"已安全退出"叠加
+    toasts.forEach((t) => dismissToast(t.id));
     logout();
     showToast('已安全退出登录', 'info');
     navigate('/login');
