@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { UserProfile, Medication, ScheduleDose, HealthRecord, FamilyMember, FamilyRequest, AppNotification, DoseStatus } from '@/types';
 import { elderProfile, familyProfile, medications as initialMeds, todaySchedule, healthRecords as initialHealth, familyMembers as initialFamily, notifications as initialNotifs } from '@/data/mockData';
 import { assistantApi, authApi, familyApi, healthApi, isNotFoundError, medicationApi, notificationApi, scheduleApi, userApi } from '@/lib/api';
@@ -78,6 +78,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIncomingRequests(incoming);
     setOutgoingRequests(outgoing);
   }, []);
+
+  // 服药提醒：每分钟检查一次，到点了弹通知
+  const remindedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user || user.role !== 'elder') return;
+
+    // 请求通知权限
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const checkSchedule = () => {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      schedule.forEach((dose) => {
+        // 只提醒待服用的，且时间匹配
+        if (dose.status !== 'pending') return;
+        const key = `${dose.id}_${currentTime}`;
+        if (remindedRef.current.has(key)) return;
+        
+        if (dose.time === currentTime) {
+          remindedRef.current.add(key);
+          
+          // 页面内 toast 提醒
+          showToast(`💊 该服药了：${dose.medicationName} ${dose.dosage}`, 'info');
+          
+          // 浏览器通知
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('智药护航 · 服药提醒', {
+              body: `该服药了：${dose.medicationName} ${dose.dosage}`,
+              icon: '/logo.png',
+            });
+          }
+        }
+      });
+    };
+
+    // 每分钟检查一次
+    const interval = setInterval(checkSchedule, 60000);
+    checkSchedule(); // 立即检查一次
+
+    return () => clearInterval(interval);
+  }, [user, schedule, showToast]);
 
   const loadUserData = useCallback(async () => {
     const [meds, health, notifs] = await Promise.all([medicationApi.list(), healthApi.list(), notificationApi.list()]);
