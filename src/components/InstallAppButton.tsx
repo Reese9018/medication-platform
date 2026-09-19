@@ -48,7 +48,7 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      // 浏览器支持安装，直接弹出安装对话框
+      // 浏览器支持自动安装（Android Chrome 等），直接弹出安装对话框
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
@@ -56,8 +56,19 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
       }
       setDeferredPrompt(null);
     } else {
-      // 浏览器还没准备好（冷启动/刷新次数不够），显示引导弹窗
-      alert('点击浏览器地址栏右侧的安装图标（⊕），即可将应用安装到桌面。\n\n如果没看到图标，可以用浏览器菜单中的"安装应用"或"添加到主屏幕"功能。');
+      // iOS Safari 或其他不支持自动安装的浏览器，显示引导
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+      
+      let guide = '';
+      if (isIOS) {
+        guide = 'iOS 安装方法：\n\n1. 点击底部「分享」按钮（方框带向上箭头）\n2. 选择「添加到主屏幕」\n3. 点击「添加」即可安装';
+      } else if (isAndroid) {
+        guide = 'Android 安装方法：\n\n点击浏览器右上角菜单（三个点），选择「安装应用」或「添加到主屏幕」';
+      } else {
+        guide = '点击浏览器地址栏右侧的安装图标（⊕），即可将应用安装到桌面。';
+      }
+      alert(guide);
     }
   };
 
