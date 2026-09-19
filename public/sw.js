@@ -11,15 +11,12 @@ const CACHE_VERSION = 'v1.0.0';
 const STATIC_CACHE = `zhiyao-static-${CACHE_VERSION}`;
 const PAGES_CACHE = `zhiyao-pages-${CACHE_VERSION}`;
 
-// 安装时预缓存核心资源
+// 安装时预缓存核心资源（精简到最少，加快注册速度）
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       return cache.addAll([
         '/',
-        '/index.html',
-        '/logo.png',
-        '/manifest.json'
       ]);
     }).then(() => self.skipWaiting())
   );
