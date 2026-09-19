@@ -56,17 +56,21 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
       }
       setDeferredPrompt(null);
     } else {
-      // iOS Safari 或其他不支持自动安装的浏览器，显示引导
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isAndroid = /Android/.test(navigator.userAgent);
+      // 不支持自动安装的浏览器，显示引导
+      const ua = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(ua);
+      const isQQ = /QQ\//.test(ua) || /QQBrowser/.test(ua);
+      const isWeChat = /MicroMessenger/.test(ua);
       
       let guide = '';
-      if (isIOS) {
+      if (isWeChat) {
+        guide = '当前在微信中打开，无法直接安装。\n\n请点击右上角「···」，选择「在浏览器中打开」，然后再安装。';
+      } else if (isQQ) {
+        guide = '当前在 QQ 中打开，无法直接安装。\n\n请点击右上角「···」，选择「用浏览器打开」，然后再安装。';
+      } else if (isIOS) {
         guide = 'iOS 安装方法：\n\n1. 点击底部「分享」按钮（方框带向上箭头）\n2. 选择「添加到主屏幕」\n3. 点击「添加」即可安装';
-      } else if (isAndroid) {
-        guide = 'Android 安装方法：\n\n点击浏览器右上角菜单（三个点），选择「安装应用」或「添加到主屏幕」';
       } else {
-        guide = '点击浏览器地址栏右侧的安装图标（⊕），即可将应用安装到桌面。';
+        guide = 'Android 安装方法：\n\n点击浏览器右上角菜单（三个点），选择「安装应用」或「添加到主屏幕」';
       }
       alert(guide);
     }
