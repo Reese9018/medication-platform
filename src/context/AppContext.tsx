@@ -6,6 +6,14 @@ import { assistantApi, authApi, familyApi, healthApi, isNotFoundError, medicatio
 interface Settings { elderMode: boolean; highContrast: boolean; reducedDeco: boolean; voiceRead: boolean }
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'info' }
 
+// 工具函数：把 base64 公钥转成 Uint8Array
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
 interface AppContextValue {
   user: UserProfile | null;
   login: (account: string, password: string, role?: 'elder' | 'family') => Promise<boolean>;
@@ -84,10 +92,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || user.role !== 'elder') return;
 
-    // 请求通知权限
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    // 请求通知权限 + 订阅 Web Push
+    const setupPush = async () => {
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+      
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const publicKey = 'VzaQUDDNYChpwQrV6FgcAOJGGcRlpDO1N5nVwS7SvWglsECb9RBCwCfd9MaAVIAklhZdTnQJFET7ZDFTecrwjQ';
+        
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+
+        // 保存订阅到后端
+        await fetch('/api/v1/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(subscription.toJSON()),
+        });
+        console.log('Push subscribed successfully');
+      } catch (err) {
+        console.log('Push subscription failed:', err);
+      }
+    };
+
+    setupPush();
 
     const checkSchedule = () => {
       const now = new Date();

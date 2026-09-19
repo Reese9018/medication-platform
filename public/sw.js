@@ -100,3 +100,25 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// 接收推送消息
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() || { title: '智药护航', body: '该服药了！' };
+  const title = data.title || '智药护航 · 服药提醒';
+  const options = {
+    body: data.body || '该服药了！',
+    icon: '/logo.png',
+    badge: '/logo.png',
+    vibrate: [200, 100, 200],
+    data: { url: data.url || '/' },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// 点击通知跳转
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url || '/')
+  );
+});
