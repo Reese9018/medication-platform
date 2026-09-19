@@ -47,15 +47,18 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      console.log('用户接受安装');
+    if (deferredPrompt) {
+      // 浏览器支持安装，直接弹出安装对话框
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        console.log('用户接受安装');
+      }
+      setDeferredPrompt(null);
+    } else {
+      // 浏览器还没准备好（冷启动/刷新次数不够），显示引导弹窗
+      alert('点击浏览器地址栏右侧的安装图标（⊕），即可将应用安装到桌面。\n\n如果没看到图标，可以用浏览器菜单中的"安装应用"或"添加到主屏幕"功能。');
     }
-    setDeferredPrompt(null);
   };
 
   // 已经安装了就不显示按钮
