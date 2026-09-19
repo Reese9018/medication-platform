@@ -70,16 +70,16 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
           alert('您可以通过浏览器菜单中的"安装应用"或"添加到主屏幕"来安装本应用');
         }}
         className={cn(
-          'flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm transition',
+          'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm transition',
           variant === 'default' 
             ? 'bg-sage-600 text-white hover:bg-sage-700' 
-            : 'text-sage-600 hover:bg-sage-50 border border-sage-200',
+            : 'bg-slate-600/80 text-white hover:bg-slate-600 shadow-sm',
           className
         )}
         title="安装应用"
       >
         <Download size={18} />
-        <span className="hidden sm:inline">安装应用</span>
+        <span>安装应用</span>
       </button>
     );
   }
@@ -88,16 +88,16 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
     <button
       onClick={handleInstallClick}
       className={cn(
-        'flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm transition',
+        'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm transition',
         variant === 'default' 
           ? 'bg-sage-600 text-white hover:bg-sage-700' 
-          : 'text-sage-600 hover:bg-sage-50 border border-sage-200',
+          : 'bg-slate-600/80 text-white hover:bg-slate-600 shadow-sm',
         className
       )}
       title="安装到桌面"
     >
       <Download size={18} />
-      <span className="hidden sm:inline">安装应用</span>
+      <span>安装应用</span>
     </button>
   );
 }
