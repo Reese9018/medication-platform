@@ -47,6 +47,27 @@ assistantApiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// 自动重试：冷启动/网络波动时自动重试 2 次，避免一打开就报错
+const retryRequest = async (error: any) => {
+  const config = error.config;
+  if (!config || config.__retryCount >= 2) {
+    return Promise.reject(error);
+  }
+  config.__retryCount = (config.__retryCount || 0) + 1;
+  // 网络错误或 502/503 才重试
+  const status = error.response?.status;
+  if (!error.response || status === 502 || status === 503) {
+    await new Promise((r) => setTimeout(r, 1500 * config.__retryCount));
+    return api(config);
+  }
+  return Promise.reject(error);
+};
+
+api.interceptors.response.use(
+  (response) => response,
+  retryRequest
+);
+
 // ============================================================
 // 接口错误 → 用户可读文案
 // ============================================================

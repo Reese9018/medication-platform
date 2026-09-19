@@ -89,11 +89,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [refreshFamily]);
 
   useEffect(() => {
+    // 先预热后端（冷启动），避免用户刚打开就报错
+    const warmup = fetch('/api/v1/health').catch(() => {});
+    
     if (!localStorage.getItem('zhiyouyao_token')) return;
-    authApi.me().then((profile) => {
-      setUser(profile);
-      return loadUserData();
-    }).catch(() => authApi.logout());
+    warmup.then(() => {
+      authApi.me().then((profile) => {
+        setUser(profile);
+        return loadUserData();
+      }).catch(() => authApi.logout());
+    });
   }, [loadUserData]);
 
   const login = useCallback(async (account: string, password: string, role?: 'elder' | 'family') => {
