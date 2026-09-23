@@ -216,11 +216,16 @@ export function MedicationsPage() {
                       ? 'text-amber-600 bg-amber-50 border-amber-200'
                       : 'text-sage-500 bg-sage-50 border-sage-200';
                     return (
-                      <p className={cn('inline-block text-xs px-2 py-0.5 rounded-full border', colorClass)}>
-                        {expiry.status === 'expired' && '🔴 '}
-                        {expiry.status === 'warning' && '🟡 '}
-                        {expiry.label}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn('inline-block text-xs px-2 py-0.5 rounded-full border', colorClass)}>
+                          {expiry.status === 'expired' && '🔴 '}
+                          {expiry.status === 'warning' && '🟡 '}
+                          {expiry.label}
+                        </span>
+                        <span className="text-xs text-sage-400">
+                          有效期至：{m.expiryDate}
+                        </span>
+                      </div>
                     );
                   })()}
                 </div>
