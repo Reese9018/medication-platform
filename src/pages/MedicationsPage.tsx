@@ -526,6 +526,11 @@ function MedicationFormModal({ open, editing, onClose, onSave }: {
           <input type="date" className="input" value={form.endDate || ''} onChange={(e) => set('endDate', e.target.value || undefined)} />
         </div>
         <div className="sm:col-span-2">
+          <label className="label">药品有效期至（必填，用于过期预警）</label>
+          <input type="date" className="input" value={form.expiryDate || ''} onChange={(e) => set('expiryDate', e.target.value)} />
+          <p className="text-xs text-sage-400 mt-1">药品包装盒上的"有效期至"日期，系统会自动提醒您临期/过期药品</p>
+        </div>
+        <div className="sm:col-span-2">
           <label className="label">服药提醒（提前多少分钟发消息提醒）</label>
           <input type="number" min={0} max={120} className="input" value={form.remindBeforeMinutes ?? 30} onChange={(e) => set('remindBeforeMinutes', Math.max(0, Math.min(120, Number(e.target.value))))} />
           <p className="text-xs text-sage-400 mt-1">每次服药时间到达前，提前这些分钟向您发送提醒消息</p>
