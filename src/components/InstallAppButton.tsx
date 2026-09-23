@@ -59,29 +59,6 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
   // 已经安装了就不显示按钮
   if (isInstalled) return null;
 
-  // 浏览器不支持 PWA 安装（比如 Safari 桌面版）
-  if (!deferredPrompt) {
-    return (
-      <button
-        onClick={() => {
-          // 提示用户如何手动安装
-          alert('您可以通过浏览器菜单中的"安装应用"或"添加到主屏幕"来安装本应用');
-        }}
-        className={cn(
-          'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm transition',
-          variant === 'default' 
-            ? 'bg-sage-600 text-white hover:bg-sage-700' 
-            : 'bg-slate-600/80 text-white hover:bg-slate-600 shadow-sm',
-          className
-        )}
-        title="安装应用"
-      >
-        <Download size={18} />
-        <span>安装应用</span>
-      </button>
-    );
-  }
-
   return (
     <button
       onClick={handleInstallClick}
@@ -92,7 +69,7 @@ export function InstallAppButton({ className, variant = 'outline' }: InstallAppB
           : 'bg-slate-600/80 text-white hover:bg-slate-600 shadow-sm',
         className
       )}
-      title="安装到桌面"
+      title="安装应用"
     >
       <Download size={18} />
       <span>安装应用</span>
