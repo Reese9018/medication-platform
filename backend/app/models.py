@@ -64,6 +64,7 @@ class Medication(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_date: Mapped[date] = mapped_column(Date, default=date.today)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # 停药/结束日期，留空表示长期服用
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # 药品有效期至
     remind_before_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 服药前提前提醒分钟数
     contraindications: Mapped[list] = mapped_column(JSON, default=list)
     precautions: Mapped[str | None] = mapped_column(Text, nullable=True)

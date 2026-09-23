@@ -45,6 +45,13 @@ def run_legacy_migrations() -> None:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN profile_updated_at TIMESTAMP"))
 
+    # medications.expiry_date：药品有效期至
+    if "medications" in tables:
+        med_cols = {c["name"] for c in inspector.get_columns("medications")}
+        if "expiry_date" not in med_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE medications ADD COLUMN expiry_date DATE"))
+
     if "family_links" not in tables:
         return
     cols = {c["name"] for c in inspector.get_columns("family_links")}

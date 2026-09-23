@@ -207,7 +207,10 @@ function toMedication(data: Record<string, unknown>): Medication {
     status: data.status === 'paused' || data.status === 'finished' ? data.status : 'active',
     riskLevel: data.risk_level === 'high' || data.risk_level === 'mid' ? data.risk_level : 'low',
     category: String(data.category ?? '其他'), notes: data.notes ? String(data.notes) : undefined,
-    startDate: String(data.start_date ?? ''), endDate: data.end_date ? String(data.end_date) : undefined, remindBeforeMinutes: data.remind_before_minutes != null ? Number(data.remind_before_minutes) : undefined, contraindications: Array.isArray(data.contraindications) ? data.contraindications.map(String) : [],
+    startDate: String(data.start_date ?? ''), endDate: data.end_date ? String(data.end_date) : undefined,
+    expiryDate: data.expiry_date ? String(data.expiry_date) : undefined,
+    remindBeforeMinutes: data.remind_before_minutes != null ? Number(data.remind_before_minutes) : undefined,
+    contraindications: Array.isArray(data.contraindications) ? data.contraindications.map(String) : [],
     precautions: data.precautions ? String(data.precautions) : undefined,
   };
 }
@@ -269,6 +272,7 @@ export const medicationApi = {
       purpose: medication.purpose, frequency_per_day: medication.frequencyPerDay, times: medication.times, status: medication.status,
       risk_level: medication.riskLevel, category: medication.category, notes: medication.notes, start_date: medication.startDate,
       end_date: medication.endDate || null,
+      expiry_date: medication.expiryDate || null,
       remind_before_minutes: medication.remindBeforeMinutes ?? 30,
       contraindications: medication.contraindications, precautions: medication.precautions,
     });

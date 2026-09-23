@@ -47,13 +47,13 @@ class MedicationCreate(BaseModel):
     purpose: str = ""; frequency_per_day: int = Field(default=1, ge=1, le=12)
     times: list[str] = []; status: str = "active"; risk_level: RiskLevel = "low"
     category: str = "其他"; notes: str | None = None; start_date: date = Field(default_factory=date.today)
-    end_date: date | None = None; remind_before_minutes: int | None = Field(default=None, ge=0, le=120)
+    end_date: date | None = None; expiry_date: date | None = None; remind_before_minutes: int | None = Field(default=None, ge=0, le=120)
     contraindications: list[str] = []; precautions: str | None = None
 
 class MedicationOut(ORMModel):
     id: int; user_id: int; name: str; generic_name: str | None; spec: str; dosage: str
     purpose: str; frequency_per_day: int; times: list[Any]; status: str; risk_level: str
-    category: str; notes: str | None; start_date: date; end_date: date | None; remind_before_minutes: int | None; contraindications: list[Any]; precautions: str | None
+    category: str; notes: str | None; start_date: date; end_date: date | None; expiry_date: date | None; remind_before_minutes: int | None; contraindications: list[Any]; precautions: str | None
 
 class ScheduleCreate(BaseModel):
     medication_id: int; dose_date: date = Field(default_factory=date.today); period: str
