@@ -113,6 +113,23 @@ def _ensure_today_schedule(db: Session, elder: User | None) -> None:
     db.commit()
 
 
+def _fill_missing_expiry(db: Session, elder: User) -> None:
+    """给演示账号名下「没有设置有效期」的药品自动补一个有效期（幂等）。
+
+    只针对 elder 演示账号；真实用户数据不触碰。已有有效期的药品不会覆盖。
+    这样老账号里已经存在的药品也能正常显示过期/临期预警，而不是一片空白。
+    """
+    meds = db.query(Medication).filter(Medication.user_id == elder.id, Medication.expiry_date.is_(None)).all()
+    for med in meds:
+        # 按药品类别给一个不同的演示有效期：降压药已过期、降糖药临期、其余长期安全
+        if med.category == "降压药":
+            med.expiry_date = date.today() - timedelta(days=30)      # 已过期
+        elif med.category == "降糖药":
+            med.expiry_date = date.today() + timedelta(days=60)      # 临期
+        else:
+            med.expiry_date = date.today() + timedelta(days=200)     # 安全期
+
+
 def seed_demo_data(db: Session) -> None:
     """幂等维护演示数据，保证「老人端智能用药助手」任何时候都有完整档案可读：
 
@@ -133,6 +150,9 @@ def seed_demo_data(db: Session) -> None:
     # 老人名下缺什么补什么（count==0 才补，避免覆盖用户自己录入/删除过的数据）
     if db.query(Medication).filter(Medication.user_id == elder.id).count() == 0:
         _seed_elder_medications(db, elder)
+    else:
+        # 老账号已有药品：只补缺失的有效期，不覆盖用户设置过的
+        _fill_missing_expiry(db, elder)
     if db.query(HealthRecord).filter(HealthRecord.user_id == elder.id).count() == 0:
         _seed_elder_records(db, elder)
     if db.query(Notification).filter(Notification.user_id == elder.id).count() == 0:
