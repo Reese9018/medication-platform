@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cloud.medication_platform.twa",
+      "sha256_cert_fingerprints": [
+        "D3:57:29:D3:BF:FE:C8:EB:81:28:70:65:49:36:8C:96:A0:39:F1:42:7A:B4:BE:4C:82:3B:04:9A:29:7B:72:85"
+      ]
+    }
+  }
+]
