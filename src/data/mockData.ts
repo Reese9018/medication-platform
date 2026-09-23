@@ -64,6 +64,7 @@ export const medications: Medication[] = [
     category: '降压药',
     startDate: '2024-03-15',
     endDate: '2026-12-31', // 长期服用，预计年底复查后再评估
+    expiryDate: daysAgo(30), // 已过期30天
     remindBeforeMinutes: 30,
     contraindications: ['对硝苯地平过敏者禁用'],
     precautions: '可能引起面部潮红、踝部水肿；避免与葡萄柚汁同服。',
@@ -82,6 +83,7 @@ export const medications: Medication[] = [
     category: '降糖药',
     startDate: '2024-03-15',
     // endDate 留空 = 长期服用
+    expiryDate: daysAgo(-60), // 还有60天过期
     remindBeforeMinutes: 30,
     contraindications: ['严重肾功能不全禁用'],
     precautions: '餐后服用以减少胃肠道不适。',
@@ -100,6 +102,7 @@ export const medications: Medication[] = [
     category: '心血管药',
     startDate: '2024-03-20',
     endDate: '2026-12-31', // 预防性用药，长期服用
+    expiryDate: daysAgo(-200), // 还有200天过期
     remindBeforeMinutes: 30,
     contraindications: ['活动性消化道溃疡禁用'],
     precautions: '注意观察有无出血倾向，如黑便、牙龈出血。',

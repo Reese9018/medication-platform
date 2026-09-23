@@ -39,6 +39,9 @@ export interface Medication {
   notes?: string;
   startDate: string;
   endDate?: string; // 停药/结束日期（留空表示长期服用）
+  expiryDate?: string; // 有效期至（YYYY-MM-DD）
+  openedDate?: string; // 开封日期
+  openedShelfLifeDays?: number; // 开封后有效期（天）
   remindBeforeMinutes?: number; // 每次服药前提前多少分钟发消息提醒
   contraindications?: string[];
   precautions?: string;

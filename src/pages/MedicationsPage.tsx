@@ -18,6 +18,24 @@ import { FamilyMedsView } from './family/FamilyMedsView';
 
 const categories = ['全部', '降压药', '降糖药', '心血管药', '精神类药', '其他'];
 
+// 计算药品过期状态
+function getExpiryInfo(m: Medication): { status: 'safe' | 'warning' | 'expired'; daysLeft: number; label: string } | null {
+  if (!m.expiryDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(m.expiryDate);
+  expiry.setHours(0, 0, 0, 0);
+  const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysLeft < 0) {
+    return { status: 'expired', daysLeft, label: `已过期 ${Math.abs(daysLeft)} 天` };
+  } else if (daysLeft <= 90) {
+    return { status: 'warning', daysLeft, label: `剩余 ${daysLeft} 天过期` };
+  } else {
+    return { status: 'safe', daysLeft, label: `有效期至 ${m.expiryDate}` };
+  }
+}
+
 const statusMap = {
   active: { label: '服用中', icon: CheckCircle2, color: 'text-sage-600 bg-sage-50 border-sage-200' },
   paused: { label: '已暂停', icon: PauseCircle, color: 'text-amber-600 bg-amber-50 border-amber-200' },
@@ -109,6 +127,44 @@ export function MedicationsPage() {
         </div>
       </div>
 
+      {/* 过期/临期横幅提醒 */}
+      {(() => {
+        const expired = medications.filter((m) => getExpiryInfo(m)?.status === 'expired');
+        const warning = medications.filter((m) => getExpiryInfo(m)?.status === 'warning');
+        if (expired.length === 0 && warning.length === 0) return null;
+        
+        return (
+          <div className={cn(
+            'rounded-xl p-4 flex items-center gap-3 border',
+            expired.length > 0 
+              ? 'bg-coral-50 border-coral-200' 
+              : 'bg-amber-50 border-amber-200'
+          )}>
+            <div className={cn(
+              'w-10 h-10 rounded-full flex items-center justify-center text-xl',
+              expired.length > 0 ? 'bg-coral-100' : 'bg-amber-100'
+            )}>
+              ⚠️
+            </div>
+            <div className="flex-1">
+              {expired.length > 0 && (
+                <p className="font-semibold text-coral-700">
+                  您有 {expired.length} 种药品已过期，请勿服用！
+                </p>
+              )}
+              {warning.length > 0 && (
+                <p className={cn('font-semibold', expired.length > 0 ? 'text-coral-600' : 'text-amber-700')}>
+                  您有 {warning.length} 种药品即将过期（90天内）
+                </p>
+              )}
+              <p className="text-sm mt-0.5 opacity-80">
+                请及时清理药箱，过期药品请按有害垃圾分类处理。
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Medication cards */}
       {filtered.length === 0 ? (
         <Card><EmptyState icon={<Pill size={40} />} title="未找到匹配的药品" hint="试试调整搜索或筛选条件" /></Card>
@@ -151,6 +207,22 @@ export function MedicationsPage() {
                   <p className="text-sage-600 flex items-center gap-1.5">
                     <Clock size={13} className="text-sage-400" /> {m.times.join('、')}
                   </p>
+                  {(() => {
+                    const expiry = getExpiryInfo(m);
+                    if (!expiry) return null;
+                    const colorClass = expiry.status === 'expired' 
+                      ? 'text-coral-600 bg-coral-50 border-coral-200' 
+                      : expiry.status === 'warning'
+                      ? 'text-amber-600 bg-amber-50 border-amber-200'
+                      : 'text-sage-500 bg-sage-50 border-sage-200';
+                    return (
+                      <p className={cn('inline-block text-xs px-2 py-0.5 rounded-full border', colorClass)}>
+                        {expiry.status === 'expired' && '🔴 '}
+                        {expiry.status === 'warning' && '🟡 '}
+                        {expiry.label}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div className="mt-3 flex items-center justify-between">
