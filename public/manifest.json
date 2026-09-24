@@ -20,8 +20,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["health", "medical", "productivity"],
+  ],  "categories": ["health", "medical", "productivity"],
   "shortcuts": [
     {
       "name": "今日用药",
